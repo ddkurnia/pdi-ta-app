@@ -532,17 +532,19 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=7"></script>
+<script src="js/app.js?v=8"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    // Ensure Firebase persists auth across page refreshes
-    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    showLoading();
     currentUser = await checkAuth('ta');
+    hideLoading();
     const nama = currentUser.nama || currentUser.email;
     document.getElementById('welcomeName').textContent = 'Halo, ' + nama + '!';
     document.getElementById('profileName').textContent = nama;
     document.getElementById('profileAvatar').textContent = nama.charAt(0).toUpperCase();
+    // Mark TA as logged in (for reference)
+    localStorage.setItem('pdi_ta_logged_in', 'true');
     // Init real-time notifications (TA role = false)
     initNotifs(currentUser.uid, false);
     // Init real-time listener for TA reports
@@ -550,6 +552,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Load home page
     switchPage('home');
   } catch(e) {
+    hideLoading();
     console.error('Init error:', e);
   }
 });
