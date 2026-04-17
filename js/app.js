@@ -1249,11 +1249,30 @@ function renderAdminUserList() {
     return;
   }
 
+  // Count reports per user from cached admin reports (real-time)
+  var reportCounts = {};
+  cachedAdminReports.forEach(function(r) {
+    var uid = r.data.userId;
+    if (uid) reportCounts[uid] = (reportCounts[uid] || 0) + 1;
+  });
+
   var h = '';
   cachedAdminUsers.forEach(function(item) {
     var u = item.data;
     var statusClass = u.status === 'active' ? 'active' : u.status === 'rejected' ? 'rejected' : 'pending';
     var statusText = u.status === 'active' ? 'Aktif' : u.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+
+    // Profile photo or initial avatar
+    var avatarHtml = '';
+    if (u.photo) {
+      avatarHtml = '<div style="width:44px;height:44px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-right:12px;background:var(--bg)"><img src="' + u.photo + '" style="width:100%;height:100%;object-fit:cover"></div>';
+    } else {
+      var initial = (u.nama || u.email || 'T').charAt(0).toUpperCase();
+      avatarHtml = '<div style="width:44px;height:44px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0;margin-right:12px">' + initial + '</div>';
+    }
+
+    // Total reports for this user
+    var totalReports = reportCounts[item.id] || 0;
 
     var actions = '<span class="status status-' + statusClass + '">' + statusText + '</span>';
     if (u.status === 'pending') {
@@ -1261,10 +1280,15 @@ function renderAdminUserList() {
                  ' <button class="btn btn-red btn-sm" onclick="rejectUser(\'' + item.id + '\')">\u2717</button>';
     }
 
-    h += '<div class="pend-user">' +
-      '<div class="pu-info">' +
+    h += '<div class="pend-user" style="align-items:center">' +
+      avatarHtml +
+      '<div class="pu-info" style="flex:1;min-width:0">' +
         '<div class="pu-name">' + esc(u.nama || '-') + '</div>' +
-        '<div class="pu-email">' + esc(u.email) + ' &middot; ' + (u.jabatan || '-') + '</div>' +
+        '<div class="pu-email">' + esc(u.jabatan || '-') + ' &middot; ' + esc(u.email) + '</div>' +
+      '</div>' +
+      '<div style="text-align:center;margin-right:12px;flex-shrink:0">' +
+        '<div style="font-size:18px;font-weight:800;color:var(--text)">' + totalReports + '</div>' +
+        '<div style="font-size:10px;color:var(--text3);font-weight:500">Laporan</div>' +
       '</div>' +
       '<div class="pu-actions">' + actions + '</div>' +
     '</div>';
