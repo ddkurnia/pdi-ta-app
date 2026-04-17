@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Admin - PDI TA App</title>
   <link rel="stylesheet" href="css/style.css?v=6">
   <style>
@@ -511,13 +514,16 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
     <div class="modal-content" id="notifModalBody" style="padding:0">
       <div class="empty-state"><div class="empty-icon">🔔</div><h4>Belum Ada Notifikasi</h4></div>
     </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-sm" onclick="markAllRead(currentUser.uid)">Tandai Semua Dibaca</button>
+    </div>
   </div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=13"></script>
+<script src="js/app.js?v=16"></script>
 <script>
 const ADMIN_PIN = 'pdimeranti2025';
 
@@ -536,6 +542,8 @@ async function doAdminLogin() {
     document.getElementById('adminApp').style.display = 'flex';
     // Init real-time notifications (admin role = true, includes 'admin' target)
     initNotifs(currentUser.uid, true);
+    // Init FCM for push notifications (background)
+    initFCM();
     // Init real-time listeners for reports and users
     initAdminRealtime();
     switchPage('a_home');
