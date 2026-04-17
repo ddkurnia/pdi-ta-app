@@ -378,13 +378,30 @@ function switchPage(name) {
 // ============================================================
 function checkAuth(role) {
   return new Promise(function(resolve, reject) {
-    auth.onAuthStateChanged(async function(user) {
-      if (!user) { location.href = 'index.html'; return reject('no auth'); }
+    // Use a small timeout to avoid false-negative when Firebase restores persisted session
+    var resolved = false;
+    var unsub = auth.onAuthStateChanged(async function(user) {
+      if (!user) {
+        // Wait briefly - Firebase might emit null before restoring persisted user
+        // If after a short delay there's still no user, then redirect
+        setTimeout(function() {
+          if (!resolved && !auth.currentUser) {
+            resolved = true;
+            unsub(); // Clean up listener
+            location.href = 'index.html';
+            return reject('no auth');
+          }
+        }, 1000);
+        return;
+      }
+      if (resolved) return;
       try {
         var doc = await db.collection('users').doc(user.uid).get();
         if (!doc.exists) {
           showToast('Data user tidak ditemukan', 'error');
           auth.signOut();
+          resolved = true;
+          unsub();
           location.href = 'index.html';
           return reject('no data');
         }
@@ -392,19 +409,25 @@ function checkAuth(role) {
         if (u.status !== 'active') {
           showToast('Akun belum di-approve admin', 'warning');
           auth.signOut();
+          resolved = true;
+          unsub();
           location.href = 'index.html';
           return reject('not active');
         }
         if (role && u.role !== role) {
           showToast('Akses ditolak', 'error');
+          resolved = true;
+          unsub();
           location.href = u.role === 'admin' ? 'admin.html' : 'ta.html';
           return reject('wrong role');
         }
+        resolved = true;
+        unsub(); // Clean up listener after successful auth check
         currentUser = { uid: user.uid, email: user.email, role: u.role, ...u };
         resolve(currentUser);
       } catch (e) {
         console.error('checkAuth error:', e);
-        reject(e);
+        if (!resolved) { resolved = true; reject(e); }
       }
     });
   });
@@ -623,8 +646,9 @@ function renderNotifs(snap) {
     var ur = !n.isRead;
     var judul = (n.judul || '').toLowerCase();
     var icon = '\uD83D\uDCE2', bg = 'var(--purple-bg)';
-    if (judul.indexOf('disetujui') >= 0 || judul.indexOf('akun') >= 0) { icon = '\u2705'; bg = 'var(--green-bg)'; }
+    if (judul.indexOf('diterima') >= 0 || judul.indexOf('akun') >= 0) { icon = '\u2705'; bg = 'var(--green-bg)'; }
     else if (judul.indexOf('ditolak') >= 0) { icon = '\u274C'; bg = 'var(--red-light)'; }
+    else if (judul.indexOf('revisi') >= 0) { icon = '\uD83D\uDD04'; bg = 'var(--blue-bg)'; }
     else if (judul.indexOf('laporan baru') >= 0) { icon = '\uD83D\uDCCB'; bg = 'var(--blue-bg)'; }
     else if (judul.indexOf('pengumuman') >= 0) { icon = '\uD83D\uDCE2'; bg = 'var(--purple-bg)'; }
 
@@ -773,10 +797,10 @@ async function loadTADashboard() {
 
 // v6: renderReportCard uses normalized data (fotoUrl already filtered, type already normalized)
 function renderReportCard(r, id) {
-  var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
-  var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+  var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+  var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
   var fotoCount = (r.fotoUrl && Array.isArray(r.fotoUrl)) ? r.fotoUrl.length : 0;
-  var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
+  var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
 
   return '<div class="report-item" onclick="viewReport(\'' + id + '\')">' +
     '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
@@ -958,8 +982,8 @@ async function viewReport(id) {
     var doc = await db.collection('laporan').doc(id).get();
     if (!doc.exists) { body.innerHTML = '<p style="text-align:center;color:var(--text3)">Tidak ditemukan</p>'; return; }
     var r = normalizeReport(doc.data());
-    var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
-    var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+    var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+    var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
 
     // Photos (already normalized - fotoUrl is now always a clean array of valid URLs)
     var photos = '';
@@ -973,12 +997,13 @@ async function viewReport(id) {
 
     // Admin action buttons
     var adminActions = '';
-    if (currentUser && currentUser.role === 'admin' && r.status === 'pending') {
+    if (currentUser && currentUser.role === 'admin' && (r.status === 'pending' || r.status === 'revisi')) {
       adminActions = '<div class="mt-16" style="padding-top:16px;border-top:1px solid var(--border)">' +
         '<div class="detail-field"><label>Catatan (opsional)</label><textarea id="adminNote" class="form-input" rows="3" placeholder="Catatan admin..."></textarea></div>' +
-        '<div class="flex gap-8">' +
-          '<button class="btn btn-green btn-block" onclick="approveReport(\'' + id + '\')">\u2713 Setujui</button>' +
-          '<button class="btn btn-red btn-block" onclick="rejectReport(\'' + id + '\')">\u2717 Tolak</button>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="btn btn-green" style="flex:1;min-width:100px" onclick="approveReport(\'' + id + '\')">\u2713 Diterima</button>' +
+          '<button class="btn" style="flex:1;min-width:100px;background:var(--blue);color:#fff" onclick="reviseReport(\'' + id + '\')">\u21BB Revisi</button>' +
+          '<button class="btn btn-red" style="flex:1;min-width:100px" onclick="rejectReport(\'' + id + '\')">\u2717 Ditolak</button>' +
         '</div>' +
       '</div>';
     }
@@ -1105,14 +1130,14 @@ function renderAdminReportList() {
   var h = header;
   filtered.forEach(function(item) {
     var r = item.data;
-    var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
-    var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
-    var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
+    var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+    var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+    var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
     var isChecked = selectedReportIds.has(item.id);
 
     var quickBtns = '';
-    if (r.status === 'pending' && isAdmin) {
-      quickBtns = ' &middot; <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
+    if ((r.status === 'pending' || r.status === 'revisi') && isAdmin) {
+      quickBtns = ' &middot; <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="event.stopPropagation();quickRevise(\'' + item.id + '\')">\u21BB</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
     }
 
     var checkbox = '';
@@ -1285,9 +1310,9 @@ async function loadAdminReports() {
     var h = '';
     filtered.forEach(function(item) {
       var r = item.data;
-      var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
-      var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
-      var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
+      var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+      var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+      var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
 
       h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')">' +
         '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
@@ -1368,15 +1393,38 @@ async function approveReport(id) {
     var doc = await db.collection('laporan').doc(id).get();
     var r = doc.data();
     await db.collection('notifikasi').add({
-      judul: 'Laporan Disetujui',
-      pesan: 'Laporan "' + r.judul + '" telah disetujui.' + (note ? ' Catatan: ' + note : ''),
+      judul: 'Laporan Diterima',
+      pesan: 'Laporan "' + r.judul + '" telah diterima.' + (note ? ' Catatan: ' + note : ''),
       target: r.userId,
       userId: currentUser.uid,
       isRead: false,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     hideLoading();
-    showToast('Laporan disetujui', 'success');
+    showToast('Laporan diterima', 'success');
+    closeModal('reportModal');
+  } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+async function reviseReport(id) {
+  var note = document.getElementById('adminNote') ? document.getElementById('adminNote').value.trim() : '';
+  if (!note) { note = prompt('Catatan revisi:'); }
+  if (!note) return showToast('Masukkan catatan revisi', 'error');
+  showLoading();
+  try {
+    await db.collection('laporan').doc(id).update({ status: 'revisi', catatanAdmin: note });
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
+    await db.collection('notifikasi').add({
+      judul: 'Laporan Perlu Revisi',
+      pesan: 'Laporan "' + r.judul + '" perlu direvisi. Catatan: ' + note,
+      target: r.userId,
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    hideLoading();
+    showToast('Laporan dikembalikan untuk revisi', 'success');
     closeModal('reportModal');
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
@@ -1411,15 +1459,36 @@ async function quickApprove(id) {
     var doc = await db.collection('laporan').doc(id).get();
     var r = doc.data();
     await db.collection('notifikasi').add({
-      judul: 'Laporan Disetujui',
-      pesan: 'Laporan "' + r.judul + '" telah disetujui.',
+      judul: 'Laporan Diterima',
+      pesan: 'Laporan "' + r.judul + '" telah diterima.',
       target: r.userId,
       userId: currentUser.uid,
       isRead: false,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
     hideLoading();
-    showToast('Disetujui', 'success');
+    showToast('Diterima', 'success');
+  } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+async function quickRevise(id) {
+  var note = prompt('Catatan revisi:');
+  if (!note) return;
+  showLoading();
+  try {
+    await db.collection('laporan').doc(id).update({ status: 'revisi', catatanAdmin: note });
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
+    await db.collection('notifikasi').add({
+      judul: 'Laporan Perlu Revisi',
+      pesan: 'Laporan "' + r.judul + '" perlu direvisi. Catatan: ' + note,
+      target: r.userId,
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    hideLoading();
+    showToast('Dikembalikan untuk revisi', 'success');
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
@@ -1703,6 +1772,7 @@ async function generateWordHTML(reports, title) {
       '.status-approved { color: #16a34a; font-weight: 700; }' +
       '.status-pending { color: #ea580c; font-weight: 700; }' +
       '.status-rejected { color: #c4161c; font-weight: 700; }' +
+      '.status-revisi { color: #2563eb; font-weight: 700; }' +
       '.photos { margin: 12px 0; }' +
       '.photos img { max-width: 400px; max-height: 300px; margin: 4px 8px 4px 0; border: 1px solid #e8e8e8; border-radius: 4px; }' +
       '.page-break { page-break-before: always; border-top: 1px dashed #ccc; padding-top: 16px; margin-top: 16px; }' +
@@ -1729,8 +1799,8 @@ async function generateWordHTML(reports, title) {
     }
 
     var reportType = r.type || 'Harian';
-    var statusClass = r.status === 'approved' ? 'status-approved' : r.status === 'rejected' ? 'status-rejected' : 'status-pending';
-    var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+    var statusClass = r.status === 'approved' ? 'status-approved' : r.status === 'rejected' ? 'status-rejected' : r.status === 'revisi' ? 'status-revisi' : 'status-pending';
+    var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
 
     html += '<div class="report">' +
       '<div class="report-header">' +
