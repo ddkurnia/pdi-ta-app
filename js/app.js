@@ -431,12 +431,32 @@ function printPage() { window.print(); }
 // TAB NAVIGATION
 // ============================================================
 function showTab(name) {
+  // Hide all tab content
   document.querySelectorAll('.tab-content').forEach(e => e.style.display = 'none');
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  // Show selected tab
   const el = document.getElementById('tab_' + name);
   if (el) el.style.display = 'block';
-  const btn = document.querySelector(`.tab-btn[data-tab="${name}"]`);
-  if (btn) btn.classList.add('active');
+
+  // Update top tab buttons (if exist)
+  document.querySelectorAll('.tab-btn').forEach(b => { b.classList.toggle('active', b.dataset.tab === name); });
+  // Update sidebar items
+  document.querySelectorAll('.sb-item').forEach(b => { b.classList.toggle('active', b.dataset.btab === name); });
+  // Update bottom nav items
+  document.querySelectorAll('.bnav-item').forEach(b => { b.classList.toggle('active', b.dataset.btab === name); });
+
+  // Update page title
+  const titles = {
+    dashboard: 'Dashboard', profil: 'Profil TA', buat: 'Buat Laporan', laporan: 'Daftar Laporan', notif: 'Notifikasi',
+    a_dashboard: 'Dashboard Admin', a_reports: 'Kelola Laporan', a_users: 'Kelola TA', a_notif: 'Notifikasi'
+  };
+  const pt = document.getElementById('pageTitle');
+  if (pt && titles[name]) pt.textContent = titles[name];
+
+  // Close sidebar on mobile after selecting tab
+  const sb = document.querySelector('.sidebar');
+  const ov = document.querySelector('.sb-overlay');
+  if (sb) sb.classList.remove('open');
+  if (ov) ov.classList.remove('show');
 
   // Load data sesuai tab
   if (name === 'dashboard' && currentUser && currentUser.role === 'ta') loadTADashboard();
