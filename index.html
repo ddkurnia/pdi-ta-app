@@ -48,7 +48,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* ===== LOGIN PAGE ===== */
+/* ===== LOGIN PAGE — always column ===== */
 .login-page {
   min-height: 100vh;
   display: flex;
@@ -57,8 +57,17 @@ body {
   position: relative;
 }
 
-/* --- Hero Wave Section --- */
+/* --- Main area (hero + wave + card) — row on desktop --- */
+.login-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* --- Hero Section --- */
 .login-hero {
+  width: 100%;
   position: relative;
   padding: 48px 24px 80px;
   text-align: center;
@@ -89,7 +98,6 @@ body {
   pointer-events: none;
 }
 
-/* Decorative circles */
 .hero-circle {
   position: absolute;
   border-radius: 50%;
@@ -148,6 +156,7 @@ body {
 
 /* --- SVG Wave --- */
 .login-wave {
+  width: 100%;
   position: relative;
   margin-top: -1px;
   line-height: 0;
@@ -161,11 +170,11 @@ body {
 
 /* --- Glass Card --- */
 .login-card-wrap {
-  flex: 1;
+  width: 100%;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  padding: 0 20px 40px;
+  padding: 0 20px 20px;
   margin-top: -44px;
   position: relative;
   z-index: 5;
@@ -200,7 +209,7 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* --- Auth Toggle (Tab Switch) --- */
+/* --- Auth Toggle --- */
 .auth-toggle {
   display: flex;
   background: rgba(0,0,0,.04);
@@ -265,10 +274,7 @@ body {
   box-shadow: 0 0 0 4px var(--red-soft);
 }
 
-.form-input::placeholder {
-  color: var(--text3);
-  font-weight: 400;
-}
+.form-input::placeholder { color: var(--text3); font-weight: 400; }
 
 /* --- Buttons --- */
 .btn {
@@ -302,7 +308,6 @@ body {
 }
 
 .btn-red:active { transform: translateY(0) scale(.97); }
-
 .btn-block { width: 100%; }
 .btn-lg { padding: 15px 28px; font-size: 15px; }
 
@@ -317,7 +322,7 @@ body {
 .toast-area > .toast-msg { margin-bottom: 8px; }
 .toast-msg { display: flex; align-items: center; padding: 12px 16px; background: var(--text); color: #fff; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; box-shadow: var(--shadow-lg); animation: slideUp .3s ease; pointer-events: auto; }
 .toast-msg > span:first-child { margin-right: 10px; }
-.toast-msg.toast-success { background: var(--green); }
+.toast-msg.toast-success { background: #16a34a; }
 .toast-msg.toast-error { background: var(--red); }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -325,53 +330,23 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
 
-/* --- Footer --- */
+/* --- Footer (always at bottom) --- */
 .login-footer {
   text-align: center;
-  padding: 16px 20px 24px;
+  padding: 8px 20px 24px;
   font-size: 11px;
   color: var(--text3);
 }
 
-.login-footer a {
-  color: var(--text2);
-  text-decoration: none;
-  font-weight: 500;
-  transition: color .2s;
-}
-
-.login-footer a:hover { color: var(--red); }
-
-/* --- Misc Links --- */
-.form-link {
-  text-align: center;
-  margin-top: 16px;
-  font-size: 12px;
-  color: var(--text3);
-}
-
-.form-link a {
-  color: var(--red);
-  text-decoration: none;
-  font-weight: 600;
-}
-
+/* --- Misc --- */
+.form-link { text-align: center; margin-top: 16px; font-size: 12px; color: var(--text3); }
+.form-link a { color: var(--red); text-decoration: none; font-weight: 600; }
 .form-link a:hover { text-decoration: underline; }
+.form-hint { text-align: center; margin-top: 14px; font-size: 11px; color: var(--text3); }
 
-.form-hint {
-  text-align: center;
-  margin-top: 14px;
-  font-size: 11px;
-  color: var(--text3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-
-/* --- Desktop centering --- */
+/* ===== Desktop: sidebar hero + card ===== */
 @media (min-width: 769px) {
-  .login-page {
+  .login-main {
     flex-direction: row;
     align-items: stretch;
   }
@@ -384,7 +359,6 @@ body {
     padding: 48px 32px;
     min-height: 100vh;
     clip-path: polygon(0 0, 100% 0, 88% 100%, 0 100%);
-    border-radius: 0;
   }
   .login-wave { display: none; }
   .login-card-wrap {
@@ -393,10 +367,8 @@ body {
     margin-top: 0;
     padding: 40px 32px;
   }
-  .login-card {
-    max-width: 420px;
-    padding: 36px 32px 28px;
-  }
+  .login-card { max-width: 420px; padding: 36px 32px 28px; }
+  .login-footer { padding: 12px 32px 24px; }
 }
   </style>
 </head>
@@ -404,86 +376,86 @@ body {
 
 <div class="login-page">
 
-  <!-- HERO SECTION -->
-  <div class="login-hero">
-    <div class="hero-circle"></div>
-    <div class="hero-circle"></div>
-    <div class="hero-circle"></div>
+  <div class="login-main">
 
-    <div class="hero-logo">
-      <img src="https://raw.githubusercontent.com/ddkurnia/pdi-ta-app/main/logo-pdip.png"
-           alt="Logo PDI Perjuangan"
-           onerror="this.style.display='none';this.parentElement.innerHTML='<span style=&quot;font-size:28px;font-weight:900;color:#c4161c&quot;>PDI</span>'">
+    <!-- HERO -->
+    <div class="login-hero">
+      <div class="hero-circle"></div>
+      <div class="hero-circle"></div>
+      <div class="hero-circle"></div>
+      <div class="hero-logo">
+        <img src="https://raw.githubusercontent.com/ddkurnia/pdi-ta-app/main/logo-pdip.png"
+             alt="Logo PDI Perjuangan"
+             onerror="this.style.display='none';this.parentElement.innerHTML='<span style=&quot;font-size:28px;font-weight:900;color:#c4161c&quot;>PDI</span>'">
+      </div>
+      <h1>PDI Perjuangan</h1>
+      <p class="subtitle">Fraksi DPRD Kab. Kepulauan Meranti</p>
     </div>
 
-    <h1>PDI Perjuangan</h1>
-    <p class="subtitle">Fraksi DPRD Kab. Kepulauan Meranti</p>
-  </div>
-
-  <!-- WAVE -->
-  <div class="login-wave">
-    <svg viewBox="0 0 1440 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      <path fill="#f0f2f5" d="M0,64 C180,100 360,0 540,48 C720,96 900,16 1080,56 C1260,96 1350,40 1440,64 L1440,100 L0,100 Z"/>
-    </svg>
-  </div>
-
-  <!-- GLASS CARD -->
-  <div class="login-card-wrap">
-    <div class="login-card">
-
-      <div class="auth-toggle">
-        <button class="active" onclick="switchAuthTab('login')">Masuk</button>
-        <button onclick="switchAuthTab('register')">Daftar</button>
-      </div>
-
-      <!-- LOGIN -->
-      <div id="formLogin">
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="loginEmail" class="form-input" placeholder="email@contoh.com" autocomplete="email">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="loginPassword" class="form-input" placeholder="Masukkan password" onkeypress="if(event.key==='Enter')doLogin()" autocomplete="current-password">
-        </div>
-        <button class="btn btn-red btn-block btn-lg" onclick="doLogin()">Masuk</button>
-        <div class="form-link">
-          <a href="javascript:void(0)" onclick="doResetPw()">Lupa Password?</a>
-        </div>
-      </div>
-
-      <!-- REGISTER -->
-      <div id="formRegister" style="display:none">
-        <div class="form-group">
-          <label>Nama Lengkap</label>
-          <input type="text" id="regNama" class="form-input" placeholder="Nama Anda" autocomplete="name">
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="regEmail" class="form-input" placeholder="email@contoh.com" autocomplete="email">
-        </div>
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" id="regPw" class="form-input" placeholder="Min. 6 karakter" autocomplete="new-password">
-        </div>
-        <div class="form-group">
-          <label>Konfirmasi Password</label>
-          <input type="password" id="regPwC" class="form-input" placeholder="Ulangi password" onkeypress="if(event.key==='Enter')doRegister()" autocomplete="new-password">
-        </div>
-        <button class="btn btn-red btn-block btn-lg" onclick="doRegister()">Daftar Akun</button>
-        <div class="form-hint">
-          Setelah daftar, tunggu approval admin
-        </div>
-      </div>
-
+    <!-- WAVE -->
+    <div class="login-wave">
+      <svg viewBox="0 0 1440 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <path fill="#f0f2f5" d="M0,64 C180,100 360,0 540,48 C720,96 900,16 1080,56 C1260,96 1350,40 1440,64 L1440,100 L0,100 Z"/>
+      </svg>
     </div>
 
-    <div class="login-footer">
-      &copy; 2025 Fraksi PDI Perjuangan &mdash; Kab. Kepulauan Meranti
+    <!-- GLASS CARD -->
+    <div class="login-card-wrap">
+      <div class="login-card">
+
+        <div class="auth-toggle">
+          <button class="active" onclick="switchAuthTab('login')">Masuk</button>
+          <button onclick="switchAuthTab('register')">Daftar</button>
+        </div>
+
+        <!-- LOGIN -->
+        <div id="formLogin">
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="loginEmail" class="form-input" placeholder="email@contoh.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="loginPassword" class="form-input" placeholder="Masukkan password" onkeypress="if(event.key==='Enter')doLogin()" autocomplete="current-password">
+          </div>
+          <button class="btn btn-red btn-block btn-lg" onclick="doLogin()">Masuk</button>
+          <div class="form-link">
+            <a href="javascript:void(0)" onclick="doResetPw()">Lupa Password?</a>
+          </div>
+        </div>
+
+        <!-- REGISTER -->
+        <div id="formRegister" style="display:none">
+          <div class="form-group">
+            <label>Nama Lengkap</label>
+            <input type="text" id="regNama" class="form-input" placeholder="Nama Anda" autocomplete="name">
+          </div>
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="regEmail" class="form-input" placeholder="email@contoh.com" autocomplete="email">
+          </div>
+          <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="regPw" class="form-input" placeholder="Min. 6 karakter" autocomplete="new-password">
+          </div>
+          <div class="form-group">
+            <label>Konfirmasi Password</label>
+            <input type="password" id="regPwC" class="form-input" placeholder="Ulangi password" onkeypress="if(event.key==='Enter')doRegister()" autocomplete="new-password">
+          </div>
+          <button class="btn btn-red btn-block btn-lg" onclick="doRegister()">Daftar Akun</button>
+          <div class="form-hint">Setelah daftar, tunggu approval admin</div>
+        </div>
+
+      </div>
     </div>
+
+  </div><!-- /.login-main -->
+
+  <div class="login-footer">
+    &copy; 2026 Fraksi PDI Perjuangan &mdash; Kab. Kepulauan Meranti
   </div>
 
-</div>
+</div><!-- /.login-page -->
 
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
