@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PDI TA App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+
+<div class="bg-white p-6 rounded-xl shadow w-80">
+
+<h2 class="text-xl font-bold mb-4 text-center">Login / Register</h2>
+
+<input id="email" placeholder="Email" class="border p-2 w-full mb-2">
+<input id="password" type="password" placeholder="Password" class="border p-2 w-full mb-2">
+
+<button onclick="register()" class="bg-blue-500 text-white w-full p-2 mb-2 rounded">
+Register
+</button>
+
+<button onclick="login()" class="bg-green-500 text-white w-full p-2 rounded">
+Login
+</button>
+
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+
+<script src="js/firebase.js"></script>
+<script src="js/auth.js"></script>
+
+</body>
+</html>
