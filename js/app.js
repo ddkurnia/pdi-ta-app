@@ -6,10 +6,10 @@
 
 // --- Firebase Config ---
 const firebaseConfig = {
-  apiKey: "AIzaSyBUcw8o7otTVB97wR0mMJIo2LNkS_oSB5Y",
+  apiKey: "AIzaSyBucw8o7otTVB97wR0mMJIo2LNkS_oSB5Y",
   authDomain: "pdi-ta-app.firebaseapp.com",
   projectId: "pdi-ta-app",
-  storageBucket: "pdi-ta-app.appspot.com",
+  storageBucket: "pdi-ta-app.firebasestorage.app",
   messagingSenderId: "477558489412",
   appId: "1:477558489412:web:b0898e239f2145a5299711"
 };
