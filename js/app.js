@@ -825,6 +825,22 @@ function renderReportCard(r, id) {
 }
 
 // --- Profil ---
+
+// Helper: rebuild avatar UI with photo or initial letter
+function updateAvatarUI(photo, initial) {
+  var avatarEl = document.getElementById('profileAvatar');
+  if (!avatarEl) return;
+  var editIconHTML = '<div style="position:absolute;bottom:-2px;right:-2px;width:24px;height:24px;background:var(--red);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.2);z-index:2;pointer-events:none">\uD83D\uDCF7</div>';
+
+  if (photo) {
+    avatarEl.innerHTML = '<img src="' + photo + '" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:50%">' + editIconHTML;
+    avatarEl.style.background = 'none';
+  } else {
+    avatarEl.innerHTML = '<span style="font-size:28px;font-weight:700;color:#fff;position:relative;z-index:1">' + initial + '</span>' + editIconHTML;
+    avatarEl.style.background = '';
+  }
+}
+
 async function processAvatarUpload(input) {
   var file = input.files[0];
   if (!file) return;
@@ -834,24 +850,12 @@ async function processAvatarUpload(input) {
   try {
     var url = await uploadToCloudinary(file);
     uploadedPhotos = [url];
-    // Preview photo directly in avatar
-    var avatarEl = document.getElementById('profileAvatar');
-    if (avatarEl) {
-      // Keep the edit icon, just update the image
-      var editIcon = document.getElementById('avatarEditIcon');
-      avatarEl.innerHTML = '';
-      avatarEl.appendChild(editIcon);
-      var img = document.createElement('img');
-      img.src = url;
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;position:relative;z-index:1';
-      avatarEl.insertBefore(img, editIcon);
-      avatarEl.style.background = 'none';
-    }
+    updateAvatarUI(url, '');
     hideLoading();
-    showToast('Foto berhasil diupload', 'success');
+    showToast('Foto berhasil diupload! Klik Simpan untuk menyimpan.', 'success');
   } catch (e) {
     hideLoading();
-    showToast('Gagal upload foto', 'error');
+    showToast('Gagal upload foto: ' + (e.message || ''), 'error');
   }
   input.value = '';
 }
@@ -865,28 +869,12 @@ async function loadProfil() {
   $sv('pNohp', currentUser.nohp || '');
   $sv('pAlamat', currentUser.alamat || '');
 
-  // Show profile photo in the avatar header at the top
-  var avatarEl = document.getElementById('profileAvatar');
-  if (avatarEl && currentUser.photo) {
-    var editIcon = document.getElementById('avatarEditIcon');
-    avatarEl.innerHTML = '';
-    avatarEl.appendChild(editIcon);
-    var img = document.createElement('img');
-    img.src = currentUser.photo;
-    img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;position:relative;z-index:1';
-    avatarEl.insertBefore(img, editIcon);
-    avatarEl.style.background = 'none';
+  var initial = (currentUser.nama || currentUser.email || 'T').charAt(0).toUpperCase();
+  if (currentUser.photo) {
+    updateAvatarUI(currentUser.photo, initial);
     uploadedPhotos = [currentUser.photo];
-  } else if (avatarEl) {
-    var nama = currentUser.nama || currentUser.email || 'T';
-    var editIcon = document.getElementById('avatarEditIcon');
-    avatarEl.innerHTML = '';
-    avatarEl.appendChild(editIcon);
-    var span = document.createElement('span');
-    span.textContent = nama.charAt(0).toUpperCase();
-    span.style.cssText = 'position:relative;z-index:1';
-    avatarEl.insertBefore(span, editIcon);
-    avatarEl.style.background = '';
+  } else {
+    updateAvatarUI(null, initial);
     uploadedPhotos = [];
   }
 }
@@ -905,26 +893,7 @@ async function saveProfil() {
     currentUser.jabatan = jabatan;
     currentUser.photo = photo;
     document.getElementById('profileName').textContent = nama;
-    // Update avatar: show photo if available, otherwise show initial
-    var avatarEl = document.getElementById('profileAvatar');
-    var editIcon = document.getElementById('avatarEditIcon');
-    if (photo) {
-      avatarEl.innerHTML = '';
-      avatarEl.appendChild(editIcon);
-      var img = document.createElement('img');
-      img.src = photo;
-      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;position:relative;z-index:1';
-      avatarEl.insertBefore(img, editIcon);
-      avatarEl.style.background = 'none';
-    } else {
-      avatarEl.innerHTML = '';
-      avatarEl.appendChild(editIcon);
-      var span = document.createElement('span');
-      span.textContent = nama.charAt(0).toUpperCase();
-      span.style.cssText = 'position:relative;z-index:1';
-      avatarEl.insertBefore(span, editIcon);
-      avatarEl.style.background = '';
-    }
+    updateAvatarUI(photo, nama.charAt(0).toUpperCase());
     var welcomeEl = document.getElementById('welcomeName');
     if (welcomeEl) welcomeEl.textContent = 'Halo, ' + nama + '!';
     hideLoading();
