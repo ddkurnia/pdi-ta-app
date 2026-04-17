@@ -539,12 +539,12 @@ document.addEventListener('DOMContentLoaded', function() {
   var adminLoggedIn = localStorage.getItem('pdi_admin_logged_in') === 'true';
 
   if (adminLoggedIn) {
-    // Try to restore session from Firebase anonymous auth
+    // Restore admin session automatically
     showLoading();
-    auth.onAuthStateChanged(function(user) {
-      hideLoading();
+    auth.onAuthStateChanged(async function(user) {
       if (user && user.isAnonymous) {
-        // Session restored - show admin panel directly
+        // Firebase anonymous session restored successfully
+        hideLoading();
         currentUser = { uid: user.uid, nama: 'Admin', role: 'admin', status: 'active' };
         document.getElementById('adminLogin').style.display = 'none';
         document.getElementById('adminApp').style.display = 'flex';
@@ -552,9 +552,23 @@ document.addEventListener('DOMContentLoaded', function() {
         initAdminRealtime();
         switchPage('a_home');
       } else {
-        // No valid session - show login form
-        localStorage.removeItem('pdi_admin_logged_in');
-        document.getElementById('adminKey').focus();
+        // Anonymous session lost (cleared by browser) - auto re-sign-in silently
+        try {
+          var result = await auth.signInAnonymously();
+          hideLoading();
+          currentUser = { uid: result.user.uid, nama: 'Admin', role: 'admin', status: 'active' };
+          document.getElementById('adminLogin').style.display = 'none';
+          document.getElementById('adminApp').style.display = 'flex';
+          initNotifs(currentUser.uid, true);
+          initAdminRealtime();
+          switchPage('a_home');
+        } catch(e) {
+          hideLoading();
+          // If anonymous auth fails completely, clear flag and show login
+          console.error('Auto re-sign failed:', e);
+          localStorage.removeItem('pdi_admin_logged_in');
+          document.getElementById('adminKey').focus();
+        }
       }
     });
   } else {
