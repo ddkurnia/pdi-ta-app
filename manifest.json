@@ -1,0 +1,27 @@
+{
+  "name": "PDI TA App - Kepulauan Meranti",
+  "short_name": "PDI TA",
+  "description": "Sistem Laporan TA Fraksi PDI Perjuangan Kab. Kepulauan Meranti",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#c4161c",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Logo_PDI_Perjuangan.svg/192px-Logo_PDI_Perjuangan.svg.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Logo_PDI_Perjuangan.svg/512px-Logo_PDI_Perjuangan.svg.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "id",
+  "dir": "ltr"
+}
