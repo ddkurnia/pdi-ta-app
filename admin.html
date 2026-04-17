@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin - PDI TA App</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔴</text></svg>">
+</head>
+<body>
+<div class="app">
+  <div class="sb-overlay" onclick="toggleSidebar()"></div>
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sb-head">
+      <div class="sb-logo"><div class="sb-logo-ic" style="background:#6f42c1">P</div><div><h3>PDI TA App</h3><p>Admin Panel</p></div></div>
+    </div>
+    <div class="sb-nav">
+      <div class="sb-sec">Menu Admin</div>
+      <a class="sb-item active" onclick="showTab('a_dashboard')"><span class="ic">&#128200;</span> Dashboard</a>
+      <a class="sb-item" onclick="showTab('a_reports')"><span class="ic">&#128196;</span> Kelola Laporan</a>
+      <a class="sb-item" onclick="showTab('a_users')"><span class="ic">&#128101;</span> Kelola TA</a>
+      <div class="sb-sec">Komunikasi</div>
+      <a class="sb-item" onclick="showTab('a_notif')"><span class="ic">&#128276;</span> Notifikasi <span class="badge-dot notif-badge">0</span></a>
+      <a class="sb-item" onclick="openBroadcast()"><span class="ic">&#128227;</span> Kirim Pemberitahuan</a>
+    </div>
+    <div class="sb-foot">
+      <div class="sb-user">
+        <div class="sb-avatar" id="userInitial" style="background:#6f42c1">A</div>
+        <div><div class="sb-name" id="userName">Admin</div><div class="sb-role">Administrator</div></div>
+        <button class="sb-logout" onclick="logout()" title="Keluar">&#9211;</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <main class="main">
+    <header class="topbar">
+      <div class="flex items-center gap-3">
+        <button class="mobile-btn" onclick="toggleSidebar()">&#9776;</button>
+        <h1 id="pageTitle">Dashboard Admin</h1>
+      </div>
+      <div class="actions">
+        <button class="btn btn-sm btn-primary no-print" onclick="openBroadcast()">&#128227; Kirim Pemberitahuan</button>
+        <a class="bell" onclick="showTab('a_notif')" title="Notifikasi">&#128276;<span class="notif-badge notif-badge" style="display:none">0</span></a>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- TAB BAR -->
+      <div class="tab-bar no-print">
+        <button class="tab-btn active" data-tab="a_dashboard" onclick="showTab('a_dashboard')">Dashboard</button>
+        <button class="tab-btn" data-tab="a_reports" onclick="showTab('a_reports')">Kelola Laporan</button>
+        <button class="tab-btn" data-tab="a_users" onclick="showTab('a_users')">Kelola TA</button>
+        <button class="tab-btn" data-tab="a_notif" onclick="showTab('a_notif')">Notifikasi</button>
+      </div>
+
+      <!-- ===== TAB: DASHBOARD ===== -->
+      <div id="tab_a_dashboard" class="tab-content">
+        <div class="stats">
+          <div class="stat"><div class="stat-ic b">&#128101;</div><div><h4 id="a_totalTA">0</h4><p>Total Tenaga Ahli</p></div></div>
+          <div class="stat"><div class="stat-ic o">&#9203;</div><div><h4 id="a_pendUser">0</h4><p>Pending Approval</p></div></div>
+          <div class="stat"><div class="stat-ic r">&#128196;</div><div><h4 id="a_totalRep">0</h4><p>Total Laporan</p></div></div>
+          <div class="stat"><div class="stat-ic o">&#9203;</div><div><h4 id="a_pendRep">0</h4><p>Laporan Pending</p></div></div>
+          <div class="stat"><div class="stat-ic g">&#9989;</div><div><h4 id="a_okRep">0</h4><p>Disetujui</p></div></div>
+          <div class="stat"><div class="stat-ic p">&#128197;</div><div><h4 id="a_monthRep">0</h4><p>Bulan Ini</p></div></div>
+          <div class="stat"><div class="stat-ic p">&#128198;</div><div><h4 id="a_yearRep">0</h4><p>Tahun Ini</p></div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>&#9203; Permintaan Pendaftaran Baru</h3></div>
+          <div id="pendUsers"><div class="empty"><div class="empty-icon">&#9203;</div><h4>Memuat...</h4></div></div>
+        </div>
+      </div>
+
+      <!-- ===== TAB: REPORTS ===== -->
+      <div id="tab_a_reports" class="tab-content">
+        <div class="filter-bar no-print">
+          <select id="aPeriod" class="form-control" onchange="loadAdminReports()"><option value="all">Semua Periode</option><option value="daily">Hari Ini</option><option value="weekly">Minggu Ini</option><option value="monthly">Bulan Ini</option><option value="yearly">Tahun Ini</option></select>
+          <button class="btn btn-outline" onclick="loadAdminReports()">&#128260; Refresh</button>
+          <button class="btn btn-primary" onclick="printPage()">&#128424; Print Laporan</button>
+        </div>
+        <div class="print-header"><h1>Laporan Kegiatan Tenaga Ahli</h1><p>Fraksi PDI Perjuangan Kab. Kepulauan Meranti</p><p id="printDate"></p></div>
+        <div class="card">
+          <div class="card-head"><h3>Semua Laporan</h3></div>
+          <div class="card-body" style="padding:0"><div class="tbl-wrap"><table>
+            <thead><tr><th>Tanggal</th><th>Tenaga Ahli</th><th>Judul</th><th>Tipe</th><th>Foto</th><th>Status</th><th>Aksi</th></tr></thead>
+            <tbody id="aRepTable"><tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Pilih tab Kelola Laporan</td></tr></tbody>
+          </table></div></div>
+        </div>
+      </div>
+
+      <!-- ===== TAB: USERS ===== -->
+      <div id="tab_a_users" class="tab-content">
+        <div class="filter-bar no-print">
+          <input type="text" class="form-control" placeholder="Cari TA..." id="searchTA" oninput="searchTA(this.value)" style="min-width:200px">
+          <button class="btn btn-outline" onclick="loadAdminUsers()">&#128260; Refresh</button>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Daftar Tenaga Ahli</h3></div>
+          <div class="card-body" style="padding:0"><div class="tbl-wrap"><table>
+            <thead><tr><th>Nama</th><th>Email</th><th>Terdaftar</th><th>Status</th><th>Profil</th><th>Aksi</th></tr></thead>
+            <tbody id="aTaTable"><tr><td colspan="6" style="text-align:center;color:#999;padding:20px">Pilih tab Kelola TA</td></tr></tbody>
+          </table></div></div>
+        </div>
+      </div>
+
+      <!-- ===== TAB: NOTIFIKASI ===== -->
+      <div id="tab_a_notif" class="tab-content">
+        <div class="flex justify-between items-center mb-3 no-print">
+          <h3 style="font-size:15px">&#128276; Notifikasi</h3>
+          <button class="btn btn-sm btn-outline" onclick="markAllRead(currentUser.uid)">&#9989; Tandai Semua Dibaca</button>
+        </div>
+        <div class="card">
+          <div id="notifList"><div class="empty"><div class="empty-icon">&#128276;</div><h4>Memuat...</h4></div></div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- REPORT MODAL -->
+<div class="modal-ov" id="reportModal" onclick="if(event.target===this)closeModal('reportModal')">
+  <div class="modal" style="width:700px">
+    <div class="modal-h"><h3>Detail Laporan</h3><button class="modal-x" onclick="closeModal('reportModal')">&times;</button></div>
+    <div class="modal-b" id="reportModalBody"></div>
+  </div>
+</div>
+
+<!-- BROADCAST MODAL -->
+<div class="modal-ov" id="bcModal" onclick="if(event.target===this)closeModal('bcModal')">
+  <div class="modal">
+    <div class="modal-h"><h3>&#128227; Kirim Pemberitahuan ke Semua User</h3><button class="modal-x" onclick="closeModal('bcModal')">&times;</button></div>
+    <div class="modal-b">
+      <div class="form-group"><label>Judul *</label><input id="bcTitle" class="form-control" placeholder="Contoh: Pengumuman Penting"></div>
+      <div class="form-group"><label>Isi Pesan *</label><textarea id="bcMsg" class="form-control" rows="4" placeholder="Tulis pesan..."></textarea></div>
+      <div class="form-group"><label>Tipe</label><select id="bcType" class="form-control"><option value="info">Informasi</option><option value="warning">Peringatan</option><option value="broadcast">Pengumuman</option></select></div>
+    </div>
+    <div class="modal-f"><button class="btn btn-outline" onclick="closeModal('bcModal')">Batal</button><button class="btn btn-primary" onclick="sendBroadcast()">&#128228; Kirim</button></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+<script src="js/app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async()=>{
+  try{
+    currentUser = await checkAuth('admin');
+    document.getElementById('userName').textContent = currentUser.nama || 'Admin';
+    initNotifs(currentUser.uid);
+    showTab('a_dashboard');
+    document.getElementById('printDate').textContent='Dicetak: '+new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  }catch(e){console.error(e)}
+});
+
+function searchTA(q){
+  q=q.toLowerCase();
+  document.querySelectorAll('#aTaTable tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q)?'':'none'});
+}
+</script>
+</body>
+</html>
