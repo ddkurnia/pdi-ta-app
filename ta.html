@@ -429,9 +429,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
     <!-- TAB: PROFIL -->
     <div id="page_profil" class="tab-page">
       <div class="profile-header">
-        <div class="profile-avatar" id="profileAvatar" style="cursor:pointer;position:relative" onclick="document.getElementById('pPhotoInput').click()">
-          <div id="avatarEditIcon" style="position:absolute;bottom:-2px;right:-2px;width:22px;height:22px;background:var(--red);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.2)">📷</div>
-        </div>
+        <div class="profile-avatar" id="profileAvatar" style="cursor:pointer;position:relative" onclick="document.getElementById('pPhotoInput').click()">T</div>
         <div class="profile-name" id="profileName">Tenaga Ahli</div>
         <div class="profile-role">Tenaga Ahli</div>
         <input type="file" id="pPhotoInput" accept="image/*" style="display:none" onchange="processAvatarUpload(this)">
@@ -526,7 +524,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=9"></script>
+<script src="js/app.js?v=10"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
   try {
