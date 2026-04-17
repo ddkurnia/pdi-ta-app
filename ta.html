@@ -2,8 +2,10 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tenaga Ahli - PDI TA App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>PDI TA App</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔴</text></svg>">
 </head>
@@ -11,20 +13,19 @@
 <div class="app">
   <div class="sb-overlay" onclick="toggleSidebar()"></div>
 
-  <!-- SIDEBAR -->
+  <!-- SIDEBAR (desktop only) -->
   <nav class="sidebar">
     <div class="sb-head">
       <div class="sb-logo"><div class="sb-logo-ic">P</div><div><h3>PDI TA App</h3><p>Tenaga Ahli</p></div></div>
     </div>
     <div class="sb-nav">
       <div class="sb-sec">Menu</div>
-      <a class="sb-item active" onclick="showTab('dashboard')"><span class="ic">&#128200;</span> Dashboard</a>
-      <a class="sb-item" onclick="showTab('profil')"><span class="ic">&#128100;</span> Profil TA</a>
-      <a class="sb-item" onclick="showTab('buat')"><span class="ic">&#9997;</span> Buat Laporan</a>
-      <div class="sb-sec">Laporan</div>
-      <a class="sb-item" onclick="showTab('laporan')"><span class="ic">&#128196;</span> Lihat Laporan</a>
+      <a class="sb-item active" data-btab="dashboard" onclick="showTab('dashboard')"><span class="ic">&#128200;</span> Dashboard</a>
+      <a class="sb-item" data-btab="laporan" onclick="showTab('laporan')"><span class="ic">&#128196;</span> Laporan</a>
+      <a class="sb-item" data-btab="buat" onclick="showTab('buat')"><span class="ic">&#9997;</span> Buat Laporan</a>
+      <a class="sb-item" data-btab="profil" onclick="showTab('profil')"><span class="ic">&#128100;</span> Profil TA</a>
       <div class="sb-sec">Lainnya</div>
-      <a class="sb-item" onclick="showTab('notif')"><span class="ic">&#128276;</span> Notifikasi <span class="badge-dot notif-badge">0</span></a>
+      <a class="sb-item" data-btab="notif" onclick="showTab('notif')"><span class="ic">&#128276;</span> Notifikasi <span class="badge-dot notif-badge">0</span></a>
     </div>
     <div class="sb-foot">
       <div class="sb-user">
@@ -35,34 +36,26 @@
     </div>
   </nav>
 
-  <!-- MAIN -->
+  <!-- MAIN CONTENT -->
   <main class="main">
+    <!-- TOP BAR -->
     <header class="topbar">
       <div class="flex items-center gap-3">
         <button class="mobile-btn" onclick="toggleSidebar()">&#9776;</button>
         <h1 id="pageTitle">Dashboard</h1>
       </div>
       <div class="actions">
-        <a class="bell" onclick="showTab('notif')" title="Notifikasi">&#128276;<span class="notif-badge notif-badge" style="display:none">0</span></a>
+        <a class="bell" onclick="showTab('notif')" title="Notifikasi">&#128276;<span class="notif-badge" style="display:none">0</span></a>
       </div>
     </header>
 
     <div class="content">
 
-      <!-- TAB BAR -->
-      <div class="tab-bar no-print">
-        <button class="tab-btn active" data-tab="dashboard" onclick="showTab('dashboard')">Dashboard</button>
-        <button class="tab-btn" data-tab="profil" onclick="showTab('profil')">Profil</button>
-        <button class="tab-btn" data-tab="buat" onclick="showTab('buat')">Buat Laporan</button>
-        <button class="tab-btn" data-tab="laporan" onclick="showTab('laporan')">Laporan</button>
-        <button class="tab-btn" data-tab="notif" onclick="showTab('notif')">Notifikasi</button>
-      </div>
-
-      <!-- ===== TAB: DASHBOARD ===== -->
+      <!-- ===== DASHBOARD ===== -->
       <div id="tab_dashboard" class="tab-content">
         <div id="profileAlert" class="alert no-print" style="display:none">
           <div class="ic">&#9888;</div>
-          <div class="info"><b style="font-size:13px">Profil Belum Lengkap</b><p>Lengkapi profil agar laporan lebih terorganisir.</p></div>
+          <div class="info"><b style="font-size:13px">Profil Belum Lengkap</b><p>Lengkapi profil Anda.</p></div>
           <button class="btn btn-warning btn-sm" onclick="showTab('profil')">Lengkapi</button>
         </div>
         <div class="stats">
@@ -75,22 +68,69 @@
         <div class="flex gap-2 mb-3 no-print">
           <button class="btn btn-primary" onclick="showTab('buat')">&#9997; Buat Laporan</button>
           <button class="btn btn-outline" onclick="showTab('laporan')">&#128196; Lihat Semua</button>
-          <button class="btn btn-outline" onclick="printPage()">&#128424; Print</button>
         </div>
         <div class="print-header"><h1>Laporan Tenaga Ahli</h1><p>Fraksi PDI Perjuangan Kab. Kepulauan Meranti</p><p id="printDate"></p></div>
         <div class="card">
           <div class="card-head"><h3>Laporan Terbaru</h3></div>
           <div class="card-body" style="padding:0"><div class="tbl-wrap"><table>
-            <thead><tr><th>Tanggal</th><th>Judul</th><th>Tipe</th><th>Foto</th><th>Status</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>Tanggal</th><th>Judul</th><th>Tipe</th><th>Status</th><th>Aksi</th></tr></thead>
             <tbody id="recentReports"><tr><td colspan="5" style="text-align:center;color:#999;padding:20px">Memuat...</td></tr></tbody>
           </table></div></div>
         </div>
       </div>
 
-      <!-- ===== TAB: PROFIL ===== -->
+      <!-- ===== LAPORAN ===== -->
+      <div id="tab_laporan" class="tab-content">
+        <div class="filter-bar no-print">
+          <select id="fPeriod" class="form-control" onchange="loadLaporan()"><option value="all">Semua</option><option value="daily">Hari Ini</option><option value="weekly">Minggu Ini</option><option value="monthly" selected>Bulan Ini</option><option value="yearly">Tahun Ini</option></select>
+          <button class="btn btn-outline" onclick="loadLaporan()">&#128260; Refresh</button>
+          <button class="btn btn-primary" onclick="printPage()">&#128424; Print</button>
+        </div>
+        <div class="print-header"><h1>Laporan Kegiatan</h1><p>Fraksi PDI Perjuangan Kab. Kepulauan Meranti</p><p id="printDate2"></p></div>
+        <div class="stats mb-3">
+          <div class="stat"><div class="stat-ic r">&#128196;</div><div><h4 id="f_total">0</h4><p>Total</p></div></div>
+          <div class="stat"><div class="stat-ic g">&#9989;</div><div><h4 id="f_approved">0</h4><p>Disetujui</p></div></div>
+          <div class="stat"><div class="stat-ic o">&#9203;</div><div><h4 id="f_pending">0</h4><p>Menunggu</p></div></div>
+          <div class="stat"><div class="stat-ic b">&#10060;</div><div><h4 id="f_rejected">0</h4><p>Ditolak</p></div></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>&#128196; Daftar Laporan</h3></div>
+          <div class="card-body" style="padding:0"><div class="tbl-wrap"><table>
+            <thead><tr><th>No</th><th>Tanggal</th><th>Judul</th><th>Tipe</th><th>Status</th><th>Aksi</th></tr></thead>
+            <tbody id="laporanTable"><tr><td colspan="6" style="text-align:center;color:#999;padding:20px">Pilih tab Laporan</td></tr></tbody>
+          </table></div></div>
+        </div>
+      </div>
+
+      <!-- ===== BUAT LAPORAN ===== -->
+      <div id="tab_buat" class="tab-content">
+        <div class="card" style="max-width:760px">
+          <div class="card-head"><h3>&#9997; Buat Laporan Kegiatan</h3><small style="color:#999">Fraksi PDI Perjuangan</small></div>
+          <div class="card-body">
+            <div class="form-group"><label>Nama TA</label><input id="rNama" class="form-control" readonly style="background:#f8f9fa"></div>
+            <div class="flex gap-3" style="flex-wrap:wrap">
+              <div class="form-group" style="flex:1;min-width:160px"><label>Tanggal *</label><input type="date" id="rTanggal" class="form-control"></div>
+              <div class="form-group" style="flex:1;min-width:160px"><label>Tipe</label>
+                <select id="rType" class="form-control"><option value="Harian">Harian</option><option value="Mingguan">Mingguan</option><option value="Bulanan">Bulanan</option><option value="Khusus">Khusus / Insidentil</option></select>
+              </div>
+            </div>
+            <div class="form-group"><label>Judul Laporan *</label><input id="rJudul" class="form-control" placeholder="Judul singkat kegiatan"></div>
+            <div class="form-group"><label>Isi Laporan *</label><textarea id="rIsi" class="form-control" rows="6" placeholder="Tuliskan detail laporan kegiatan..."></textarea></div>
+            <div class="form-group">
+              <label>Foto Kegiatan</label>
+              <input type="file" id="rPhotoInput" accept="image/*" multiple style="display:none" onchange="processFiles(this,'rPhotoGrid')">
+              <div class="upload-area" onclick="pickPhotos('rPhotoInput')"><div class="up-ic">&#128247;</div><p>Klik untuk upload foto</p><small style="color:#aaa">JPG/PNG, maks 5MB per foto</small></div>
+              <div class="photo-grid" id="rPhotoGrid"></div>
+            </div>
+            <div class="flex gap-2 mt-2"><button class="btn btn-primary btn-lg" onclick="submitReport()">&#128228; Kirim Laporan</button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== PROFIL ===== -->
       <div id="tab_profil" class="tab-content">
         <div class="card" style="max-width:680px">
-          <div class="card-head"><h3>&#128100; Data Profil Tenaga Ahli</h3></div>
+          <div class="card-head"><h3>&#128100; Profil Tenaga Ahli</h3></div>
           <div class="card-body">
             <div class="form-group"><label>Nama Lengkap *</label><input id="pNama" class="form-control" placeholder="Nama lengkap"></div>
             <div class="form-group"><label>NIP</label><input id="pNip" class="form-control" placeholder="Nomor Induk Pegawai"></div>
@@ -101,63 +141,15 @@
             <div class="form-group">
               <label>Foto Profil</label>
               <input type="file" id="pPhotoInput" accept="image/*" style="display:none" onchange="processFiles(this,'pPhotoGrid')">
-              <div class="upload-area" onclick="pickPhotos('pPhotoInput')"><div class="up-ic">&#128247;</div><p>Klik untuk upload foto</p><small style="color:#aaa">JPG/PNG, maks 5MB</small></div>
+              <div class="upload-area" onclick="pickPhotos('pPhotoInput')"><div class="up-ic">&#128247;</div><p>Klik untuk upload foto</p></div>
               <div class="photo-grid" id="pPhotoGrid"></div>
             </div>
-            <div class="flex gap-2 mt-2"><button class="btn btn-primary btn-lg" onclick="saveProfil()">&#128190; Simpan</button><button class="btn btn-outline btn-lg" onclick="showTab('dashboard')">Batal</button></div>
+            <div class="flex gap-2 mt-2"><button class="btn btn-primary btn-lg" onclick="saveProfil()">&#128190; Simpan</button></div>
           </div>
         </div>
       </div>
 
-      <!-- ===== TAB: BUAT LAPORAN ===== -->
-      <div id="tab_buat" class="tab-content">
-        <div class="card" style="max-width:760px">
-          <div class="card-head"><h3>&#9997; Formulir Laporan Kegiatan</h3><small style="color:#999">Fraksi PDI Perjuangan Kab. Kepulauan Meranti</small></div>
-          <div class="card-body">
-            <div class="form-group"><label>Nama TA</label><input id="rNama" class="form-control" readonly style="background:#f8f9fa"></div>
-            <div class="flex gap-3" style="flex-wrap:wrap">
-              <div class="form-group" style="flex:1;min-width:180px"><label>Tanggal *</label><input type="date" id="rTanggal" class="form-control"></div>
-              <div class="form-group" style="flex:1;min-width:180px"><label>Tipe</label>
-                <select id="rTipe" class="form-control"><option value="Harian">Harian</option><option value="Mingguan">Mingguan</option><option value="Bulanan">Bulanan</option><option value="Khusus">Khusus / Insidentil</option></select>
-              </div>
-            </div>
-            <div class="form-group"><label>Judul Laporan *</label><input id="rJudul" class="form-control" placeholder="Judul singkat kegiatan"></div>
-            <div class="form-group"><label>Isi Laporan *</label><textarea id="rIsi" class="form-control" rows="7" placeholder="Tuliskan detail laporan kegiatan...&#10;&#10;Contoh:&#10;1. Melakukan sosialisasi...&#10;2. Menghadiri rapat...&#10;3. Pendampingan masyarakat..."></textarea></div>
-            <div class="form-group">
-              <label>Foto Kegiatan</label>
-              <input type="file" id="rPhotoInput" accept="image/*" multiple style="display:none" onchange="processFiles(this,'rPhotoGrid')">
-              <div class="upload-area" onclick="pickPhotos('rPhotoInput')"><div class="up-ic">&#128247;</div><p>Klik untuk upload foto kegiatan</p><small style="color:#aaa">Bisa upload beberapa foto. JPG/PNG, maks 5MB/foto</small></div>
-              <div class="photo-grid" id="rPhotoGrid"></div>
-            </div>
-            <div class="flex gap-2 mt-2"><button class="btn btn-primary btn-lg" onclick="submitReport()">&#128228; Kirim Laporan</button><button class="btn btn-outline btn-lg" onclick="showTab('dashboard')">Batal</button></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ===== TAB: LAPORAN ===== -->
-      <div id="tab_laporan" class="tab-content">
-        <div class="filter-bar no-print">
-          <select id="fPeriod" class="form-control" onchange="loadLaporan()"><option value="all">Semua Periode</option><option value="daily">Hari Ini</option><option value="weekly">Minggu Ini</option><option value="monthly" selected>Bulan Ini</option><option value="yearly">Tahun Ini</option></select>
-          <button class="btn btn-outline" onclick="loadLaporan()">&#128260; Refresh</button>
-          <button class="btn btn-primary" onclick="printPage()">&#128424; Print</button>
-        </div>
-        <div class="print-header"><h1>Laporan Kegiatan Tenaga Ahli</h1><p>Fraksi PDI Perjuangan Kab. Kepulauan Meranti</p><p id="printPeriod2"></p><p id="printDate2"></p></div>
-        <div class="stats mb-3">
-          <div class="stat"><div class="stat-ic r">&#128196;</div><div><h4 id="f_total">0</h4><p>Total</p></div></div>
-          <div class="stat"><div class="stat-ic g">&#9989;</div><div><h4 id="f_approved">0</h4><p>Disetujui</p></div></div>
-          <div class="stat"><div class="stat-ic o">&#9203;</div><div><h4 id="f_pending">0</h4><p>Menunggu</p></div></div>
-          <div class="stat"><div class="stat-ic b">&#10060;</div><div><h4 id="f_rejected">0</h4><p>Ditolak</p></div></div>
-        </div>
-        <div class="card">
-          <div class="card-head"><h3>&#128196; Daftar Laporan</h3></div>
-          <div class="card-body" style="padding:0"><div class="tbl-wrap"><table>
-            <thead><tr><th>No</th><th>Tanggal</th><th>Judul</th><th>Tipe</th><th>Foto</th><th>Status</th><th>Aksi</th></tr></thead>
-            <tbody id="laporanTable"><tr><td colspan="7" style="text-align:center;color:#999;padding:20px">Pilih tab Laporan</td></tr></tbody>
-          </table></div></div>
-        </div>
-      </div>
-
-      <!-- ===== TAB: NOTIFIKASI ===== -->
+      <!-- ===== NOTIFIKASI ===== -->
       <div id="tab_notif" class="tab-content">
         <div class="flex justify-between items-center mb-3 no-print">
           <h3 style="font-size:15px">&#128276; Notifikasi</h3>
@@ -170,6 +162,31 @@
 
     </div>
   </main>
+
+  <!-- BOTTOM NAVIGATION -->
+  <nav class="bottom-nav">
+    <a class="bnav-item active" data-btab="dashboard" onclick="showTab('dashboard')">
+      <span class="bnav-icon">&#127968;</span>
+      <span>Home</span>
+    </a>
+    <a class="bnav-item" data-btab="laporan" onclick="showTab('laporan')">
+      <span class="bnav-icon">&#128196;</span>
+      <span>Laporan</span>
+    </a>
+    <a class="bnav-item bnav-center" data-btab="buat" onclick="showTab('buat')">
+      <span class="bnav-icon">&#9997;</span>
+      <span>Buat</span>
+    </a>
+    <a class="bnav-item" data-btab="profil" onclick="showTab('profil')">
+      <span class="bnav-icon">&#128100;</span>
+      <span>Profil</span>
+    </a>
+    <a class="bnav-item" data-btab="notif" onclick="showTab('notif')">
+      <span class="bnav-icon">&#128276;</span>
+      <span>Notifikasi</span>
+      <span class="notif-badge bnav-badge" style="display:none">0</span>
+    </a>
+  </nav>
 </div>
 
 <!-- REPORT MODAL -->
@@ -192,9 +209,9 @@ document.addEventListener('DOMContentLoaded', async()=>{
     document.getElementById('userInitial').textContent = (currentUser.nama||currentUser.email).charAt(0).toUpperCase();
     initNotifs(currentUser.uid);
     showTab('dashboard');
-    const now = new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    const pd = document.getElementById('printDate'); if(pd) pd.textContent='Dicetak: '+now;
-    const pd2 = document.getElementById('printDate2'); if(pd2) pd2.textContent='Dicetak: '+now;
+    var now = new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    var pd = document.getElementById('printDate'); if(pd) pd.textContent='Dicetak: '+now;
+    var pd2 = document.getElementById('printDate2'); if(pd2) pd2.textContent='Dicetak: '+now;
   }catch(e){console.error(e)}
 });
 </script>
