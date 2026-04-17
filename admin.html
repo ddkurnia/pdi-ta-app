@@ -8,7 +8,24 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔴</text></svg>">
 </head>
 <body>
-<div class="app">
+
+<!-- ===== ADMIN LOGIN SCREEN ===== -->
+<div id="adminLogin" style="position:fixed;inset:0;background:linear-gradient(135deg,#1a1a2e,#16213e);z-index:10000;display:flex;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:36px;max-width:380px;width:90%;box-shadow:0 8px 32px rgba(0,0,0,.3);text-align:center">
+    <div style="width:64px;height:64px;background:#c4161c;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:18px;margin:0 auto 16px">P</div>
+    <h2 style="font-size:20px;color:#333;margin-bottom:4px">Admin Panel</h2>
+    <p style="color:#888;font-size:13px;margin-bottom:24px">Fraksi PDI Perjuangan Kab. Kepulauan Meranti</p>
+    <div style="text-align:left;margin-bottom:14px">
+      <label style="font-size:13px;font-weight:bold;color:#555;display:block;margin-bottom:4px">Kunci Admin (PIN)</label>
+      <input type="password" id="adminKey" class="form-control" placeholder="Masukkan kunci admin..." style="width:100%;padding:12px;border:1.5px solid #ddd;border-radius:8px;font-size:15px;text-align:center;letter-spacing:4px" onkeypress="if(event.key==='Enter')doAdminLogin()" autofocus>
+    </div>
+    <button class="btn btn-primary btn-block" onclick="doAdminLogin()" style="padding:12px;font-size:15px;font-weight:bold;border:none;border-radius:8px;cursor:pointer;background:#c4161c;color:#fff;width:100%">MASUK</button>
+    <div id="loginErr" style="margin-top:12px;color:#dc3545;font-size:13px;display:none"></div>
+  </div>
+</div>
+
+<!-- ===== ADMIN APP ===== -->
+<div class="app" id="adminApp" style="display:none">
   <div class="sb-overlay" onclick="toggleSidebar()"></div>
 
   <!-- SIDEBAR -->
@@ -22,14 +39,14 @@
       <a class="sb-item" onclick="showTab('a_reports')"><span class="ic">&#128196;</span> Kelola Laporan</a>
       <a class="sb-item" onclick="showTab('a_users')"><span class="ic">&#128101;</span> Kelola TA</a>
       <div class="sb-sec">Komunikasi</div>
-      <a class="sb-item" onclick="showTab('a_notif')"><span class="ic">&#128276;</span> Notifikasi <span class="badge-dot notif-badge">0</span></a>
+      <a class="sb-item" onclick="showTab('a_notif')"><span class="ic">&#128276;</span> Notifikasi</a>
       <a class="sb-item" onclick="openBroadcast()"><span class="ic">&#128227;</span> Kirim Pemberitahuan</a>
     </div>
     <div class="sb-foot">
       <div class="sb-user">
         <div class="sb-avatar" id="userInitial" style="background:#6f42c1">A</div>
         <div><div class="sb-name" id="userName">Admin</div><div class="sb-role">Administrator</div></div>
-        <button class="sb-logout" onclick="logout()" title="Keluar">&#9211;</button>
+        <button class="sb-logout" onclick="doAdminLogout()" title="Keluar">&#9211;</button>
       </div>
     </div>
   </nav>
@@ -111,7 +128,6 @@
       <div id="tab_a_notif" class="tab-content">
         <div class="flex justify-between items-center mb-3 no-print">
           <h3 style="font-size:15px">&#128276; Notifikasi</h3>
-          <button class="btn btn-sm btn-outline" onclick="markAllRead(currentUser.uid)">&#9989; Tandai Semua Dibaca</button>
         </div>
         <div class="card">
           <div id="notifList"><div class="empty"><div class="empty-icon">&#128276;</div><h4>Memuat...</h4></div></div>
@@ -148,19 +164,65 @@
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 <script src="js/app.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', async()=>{
-  try{
-    currentUser = await checkAuth('admin');
-    document.getElementById('userName').textContent = currentUser.nama || 'Admin';
-    initNotifs(currentUser.uid);
-    showTab('a_dashboard');
-    document.getElementById('printDate').textContent='Dicetak: '+new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  }catch(e){console.error(e)}
+// =============================================
+// ADMIN KEY LOGIN (ganti PIN di bawah ini)
+// =============================================
+const ADMIN_PIN = 'pdimeranti2025';
+
+function doAdminLogin() {
+  const key = document.getElementById('adminKey').value.trim();
+  const errEl = document.getElementById('loginErr');
+
+  if (!key) {
+    errEl.textContent = 'Masukkan kunci admin terlebih dahulu';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  if (key === ADMIN_PIN) {
+    errEl.style.display = 'none';
+    // Set currentUser manually tanpa Firebase Auth
+    currentUser = {
+      uid: 'admin',
+      nama: 'Admin',
+      role: 'admin',
+      status: 'active'
+    };
+    enterAdmin();
+  } else {
+    errEl.textContent = 'Kunci admin salah! Coba lagi.';
+    errEl.style.display = 'block';
+    document.getElementById('adminKey').value = '';
+    document.getElementById('adminKey').focus();
+  }
+}
+
+function enterAdmin() {
+  document.getElementById('adminLogin').style.display = 'none';
+  document.getElementById('adminApp').style.display = 'flex';
+  document.getElementById('userName').textContent = currentUser.nama || 'Admin';
+  document.getElementById('printDate').textContent = 'Dicetak: ' + new Date().toLocaleDateString('id-ID', {day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  showTab('a_dashboard');
+}
+
+function doAdminLogout() {
+  if (confirm('Keluar dari panel admin?')) {
+    currentUser = null;
+    document.getElementById('adminApp').style.display = 'none';
+    document.getElementById('adminLogin').style.display = 'flex';
+    document.getElementById('adminKey').value = '';
+    document.getElementById('adminKey').focus();
+  }
+}
+
+// Auto-focus PIN input
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('adminKey').focus();
 });
 
-function searchTA(q){
-  q=q.toLowerCase();
-  document.querySelectorAll('#aTaTable tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q)?'':'none'});
+function searchTA(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#aTaTable tr').forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'; });
 }
 </script>
 </body>
