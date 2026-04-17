@@ -378,56 +378,64 @@ function switchPage(name) {
 // ============================================================
 function checkAuth(role) {
   return new Promise(function(resolve, reject) {
-    // Use a small timeout to avoid false-negative when Firebase restores persisted session
     var resolved = false;
+    var nullTimer = null;
+
     var unsub = auth.onAuthStateChanged(async function(user) {
-      if (!user) {
-        // Wait briefly - Firebase might emit null before restoring persisted user
-        // If after a short delay there's still no user, then redirect
-        setTimeout(function() {
+      // User found — Firebase restored the persisted session
+      if (user) {
+        // Cancel any pending null-check timer
+        if (nullTimer) { clearTimeout(nullTimer); nullTimer = null; }
+        if (resolved) return;
+        try {
+          var doc = await db.collection('users').doc(user.uid).get();
+          if (!doc.exists) {
+            showToast('Data user tidak ditemukan', 'error');
+            auth.signOut();
+            resolved = true;
+            unsub();
+            location.href = 'index.html';
+            return reject('no data');
+          }
+          var u = doc.data();
+          if (u.status !== 'active') {
+            showToast('Akun belum di-approve admin', 'warning');
+            auth.signOut();
+            resolved = true;
+            unsub();
+            location.href = 'index.html';
+            return reject('not active');
+          }
+          if (role && u.role !== role) {
+            showToast('Akses ditolak', 'error');
+            resolved = true;
+            unsub();
+            location.href = u.role === 'admin' ? 'admin.html' : 'ta.html';
+            return reject('wrong role');
+          }
+          resolved = true;
+          unsub();
+          currentUser = { uid: user.uid, email: user.email, role: u.role, ...u };
+          resolve(currentUser);
+        } catch (e) {
+          console.error('checkAuth error:', e);
+          if (!resolved) { resolved = true; reject(e); }
+        }
+        return;
+      }
+
+      // No user yet — Firebase might still be restoring persisted session
+      // Wait up to 5 seconds before giving up
+      if (!resolved && !nullTimer) {
+        nullTimer = setTimeout(function() {
+          nullTimer = null;
           if (!resolved && !auth.currentUser) {
             resolved = true;
-            unsub(); // Clean up listener
+            unsub();
             location.href = 'index.html';
             return reject('no auth');
           }
-        }, 1000);
-        return;
-      }
-      if (resolved) return;
-      try {
-        var doc = await db.collection('users').doc(user.uid).get();
-        if (!doc.exists) {
-          showToast('Data user tidak ditemukan', 'error');
-          auth.signOut();
-          resolved = true;
-          unsub();
-          location.href = 'index.html';
-          return reject('no data');
-        }
-        var u = doc.data();
-        if (u.status !== 'active') {
-          showToast('Akun belum di-approve admin', 'warning');
-          auth.signOut();
-          resolved = true;
-          unsub();
-          location.href = 'index.html';
-          return reject('not active');
-        }
-        if (role && u.role !== role) {
-          showToast('Akses ditolak', 'error');
-          resolved = true;
-          unsub();
-          location.href = u.role === 'admin' ? 'admin.html' : 'ta.html';
-          return reject('wrong role');
-        }
-        resolved = true;
-        unsub(); // Clean up listener after successful auth check
-        currentUser = { uid: user.uid, email: user.email, role: u.role, ...u };
-        resolve(currentUser);
-      } catch (e) {
-        console.error('checkAuth error:', e);
-        if (!resolved) { resolved = true; reject(e); }
+        }, 5000);
       }
     });
   });
@@ -436,6 +444,7 @@ function checkAuth(role) {
 function logout() {
   if (confirm('Keluar dari aplikasi?')) {
     cleanupListeners();
+    localStorage.removeItem('pdi_ta_logged_in');
     auth.signOut().then(function() { location.href = 'index.html'; }).catch(function(e) { showToast(e.message, 'error'); });
   }
 }
