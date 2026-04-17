@@ -156,6 +156,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 .status-pending { background: var(--orange-bg); color: var(--orange); }
 .status-approved { background: var(--green-bg); color: var(--green); }
 .status-rejected { background: var(--red-light); color: var(--red); }
+.status-revisi { background: var(--blue-bg); color: var(--blue); }
 .status-active { background: var(--green-bg); color: var(--green); }
 .status-wait { background: var(--orange-bg); color: var(--orange); }
 
@@ -316,7 +317,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
         </div>
         <div class="stat-card">
           <div class="stat-num" id="s_approved" style="color:var(--green)">0</div>
-          <div class="stat-label">Disetujui</div>
+          <div class="stat-label">Diterima</div>
         </div>
         <div class="stat-card">
           <div class="stat-num" id="s_rejected" style="color:var(--red)">0</div>
@@ -407,7 +408,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
         </div>
         <div class="stat-card">
           <div class="stat-num" id="f_approved" style="color:var(--green)">0</div>
-          <div class="stat-label">Disetujui</div>
+          <div class="stat-label">Diterima</div>
         </div>
         <div class="stat-card">
           <div class="stat-num" id="f_pending" style="color:var(--orange)">0</div>
@@ -472,9 +473,6 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
             <div class="photo-grid" id="pPhotoGrid"></div>
           </div>
           <button class="btn btn-red btn-block btn-lg" onclick="saveProfil()">Simpan Profil</button>
-          <div style="margin-top:16px">
-            <button class="btn btn-outline btn-block" onclick="logout()" style="color:var(--red);border-color:var(--red)">Keluar Aplikasi</button>
-          </div>
         </div>
       </div>
     </div>
@@ -534,10 +532,12 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=6"></script>
+<script src="js/app.js?v=7"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    // Ensure Firebase persists auth across page refreshes
+    await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
     currentUser = await checkAuth('ta');
     const nama = currentUser.nama || currentUser.email;
     document.getElementById('welcomeName').textContent = 'Halo, ' + nama + '!';
