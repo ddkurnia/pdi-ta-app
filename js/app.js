@@ -912,7 +912,7 @@ async function loadBuatForm() {
   var g = document.getElementById('rPhotoGrid');
   if (g) g.innerHTML = '';
   $sv('rNama', currentUser.nama || currentUser.email || '');
-  $sv('rTanggal', new Date().toISOString().split('T')[0]);
+  var now = new Date(); $sv('rTanggal', now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0'));
 }
 
 async function submitReport() {
@@ -1763,7 +1763,7 @@ function switchSubTab(tab) {
 
 function setDateToday() {
   var el = document.getElementById('dailyDate');
-  if (el) el.value = new Date().toISOString().split('T')[0];
+  if (el) { var n = new Date(); el.value = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); }
 }
 
 function setMonthThis() {
