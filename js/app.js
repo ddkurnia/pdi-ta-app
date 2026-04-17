@@ -1,5 +1,5 @@
 // ============================================================
-// PDI TA App - All-in-One JavaScript (Real-Time Edition v4)
+// PDI TA App - All-in-One JavaScript (Real-Time Edition v6)
 // ============================================================
 
 // --- Firebase Config ---
@@ -33,6 +33,9 @@ let cachedTAReports = [];
 let cachedAdminReports = [];
 let cachedAdminUsers = [];
 
+// Selected reports for Word export
+let selectedReportIds = new Set();
+
 // ============================================================
 // UTILITIES
 // ============================================================
@@ -41,27 +44,37 @@ function $s(id, val) { const e = document.getElementById(id); if (e) e.textConte
 function $sv(id, val) { const e = document.getElementById(id); if (e) e.value = val; }
 
 function esc(t) {
+  if (!t) return '';
   const d = document.createElement('div');
   d.textContent = t;
   return d.innerHTML;
 }
 
+// v6: Improved formatDate - handles string dates like "2026-04-17" without timezone issues
 function formatDate(d) {
   if (!d) return '-';
-  const dt = d.toDate ? d.toDate() : new Date(d);
+  if (typeof d === 'string') {
+    var parts = d.split('-');
+    if (parts.length === 3) {
+      var dt = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    return d;
+  }
+  var dt = d.toDate ? d.toDate() : new Date(d);
   return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 function formatDateTime(d) {
   if (!d) return '-';
-  const dt = d.toDate ? d.toDate() : new Date(d);
+  var dt = d.toDate ? d.toDate() : new Date(d);
   return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function timeAgo(d) {
   if (!d) return '';
-  const dt = d.toDate ? d.toDate() : new Date(d);
-  const s = Math.floor((Date.now() - dt) / 1000);
+  var dt = d.toDate ? d.toDate() : new Date(d);
+  var s = Math.floor((Date.now() - dt) / 1000);
   if (s < 60) return 'Baru saja';
   if (s < 3600) return Math.floor(s / 60) + ' menit lalu';
   if (s < 86400) return Math.floor(s / 3600) + ' jam lalu';
@@ -70,8 +83,8 @@ function timeAgo(d) {
 }
 
 function getDateRange(p) {
-  const n = new Date();
-  let s, e;
+  var n = new Date();
+  var s, e;
   if (p === 'daily') {
     s = new Date(n.getFullYear(), n.getMonth(), n.getDate());
     e = new Date(s.getTime() + 86400000);
@@ -96,14 +109,57 @@ function getDateRange(p) {
   };
 }
 
+// ============================================================
+// v6: NORMALIZE REPORT DATA
+// Handles inconsistent schema: type/tipe, fotoUrl array/string/"-",
+// tanggal timestamp/string, catatanAdmin string/"-"/""
+// ============================================================
+function normalizeReport(r) {
+  if (!r) return r;
+  // Normalize type field (some docs use "tipe")
+  if (!r.type && r.tipe) r.type = r.tipe;
+  // Normalize fotoUrl: filter out invalid values like "-" or empty strings
+  if (r.fotoUrl) {
+    if (Array.isArray(r.fotoUrl)) {
+      r.fotoUrl = r.fotoUrl.filter(function(f) { return f && typeof f === 'string' && f.indexOf('http') === 0; });
+      if (r.fotoUrl.length === 0) r.fotoUrl = [];
+    } else if (typeof r.fotoUrl === 'string') {
+      if (r.fotoUrl.indexOf('http') === 0) {
+        r.fotoUrl = [r.fotoUrl];
+      } else {
+        r.fotoUrl = [];
+      }
+    }
+  } else {
+    r.fotoUrl = [];
+  }
+  // Normalize catatanAdmin: "-" and "" treated as no note
+  if (r.catatanAdmin === '-' || r.catatanAdmin === '') r.catatanAdmin = '';
+  // Normalize tanggal: ensure it's usable for display
+  // (formatDate already handles both timestamp and string)
+  return r;
+}
+
+// v6: Client-side sort helper for reports
+function sortReportsByDate(reports) {
+  return reports.sort(function(a, b) {
+    var aData = a.data || a;
+    var bData = b.data || b;
+    var ta = aData.createdAt ? (aData.createdAt.toDate ? aData.createdAt.toDate() : new Date(aData.createdAt)) : new Date(0);
+    var tb = bData.createdAt ? (bData.createdAt.toDate ? bData.createdAt.toDate() : new Date(bData.createdAt)) : new Date(0);
+    return tb - ta;
+  });
+}
+
 // Filter cached reports by period (client-side)
 function filterByPeriod(reports, period) {
   if (period === 'all') return reports;
-  const { startDate, endDate } = getDateRange(period);
-  return reports.filter(r => {
-    if (!r.createdAt) return false;
-    const ts = r.createdAt.toDate ? r.createdAt.toDate() : new Date(r.createdAt);
-    return ts >= startDate && ts < endDate;
+  var range = getDateRange(period);
+  return reports.filter(function(r) {
+    var createdAt = r.data ? r.data.createdAt : r.createdAt;
+    if (!createdAt) return false;
+    var ts = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
+    return ts >= range.startDate && ts < range.endDate;
   });
 }
 
@@ -112,15 +168,15 @@ function filterByPeriod(reports, period) {
 // ============================================================
 function showToast(msg, type) {
   type = type || 'info';
-  let c = document.getElementById('toastArea');
+  var c = document.getElementById('toastArea');
   if (!c) {
     c = document.createElement('div');
     c.id = 'toastArea';
     c.className = 'toast-area';
     document.body.appendChild(c);
   }
-  const icons = { success: '\u2713', error: '\u2717', warning: '\u26A0', info: '\u2139' };
-  const t = document.createElement('div');
+  var icons = { success: '\u2713', error: '\u2717', warning: '\u26A0', info: '\u2139' };
+  var t = document.createElement('div');
   t.className = 'toast-msg toast-' + type;
   t.innerHTML = '<span>' + (icons[type] || '') + '</span><span>' + msg + '</span>';
   c.appendChild(t);
@@ -136,7 +192,7 @@ function showToast(msg, type) {
 // LOADING
 // ============================================================
 function showLoading() {
-  let o = document.getElementById('loadingOverlay');
+  var o = document.getElementById('loadingOverlay');
   if (!o) {
     o = document.createElement('div');
     o.id = 'loadingOverlay';
@@ -148,7 +204,7 @@ function showLoading() {
 }
 
 function hideLoading() {
-  const o = document.getElementById('loadingOverlay');
+  var o = document.getElementById('loadingOverlay');
   if (o) o.classList.remove('show');
 }
 
@@ -156,15 +212,17 @@ function hideLoading() {
 // MODAL
 // ============================================================
 function closeModal(id) {
-  document.getElementById(id).classList.remove('show');
+  var el = document.getElementById(id);
+  if (el) el.classList.remove('show');
 }
 
 function openModal(id) {
-  document.getElementById(id).classList.add('show');
+  var el = document.getElementById(id);
+  if (el) el.classList.add('show');
 }
 
 function openLightbox(src) {
-  const lb = document.createElement('div');
+  var lb = document.createElement('div');
   lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:8000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
   lb.onclick = function() { lb.remove(); };
   lb.innerHTML = '<img src="' + src + '" style="max-width:92vw;max-height:92vh;border-radius:12px;object-fit:contain;">';
@@ -172,7 +230,7 @@ function openLightbox(src) {
 }
 
 // ============================================================
-// REAL-TIME LISTENERS
+// REAL-TIME LISTENERS (v6: No composite orderBy - avoids index errors)
 // ============================================================
 
 // --- Cleanup all listeners ---
@@ -187,34 +245,47 @@ function cleanupListeners() {
 }
 
 // --- TA Real-time: Listen to own reports ---
+// v6: Removed orderBy to avoid needing composite index (userId + createdAt)
+// Data is sorted client-side after fetch
 function initTARealtime() {
   if (!currentUser || currentUser.role !== 'ta') return;
   if (taReportUnsub) taReportUnsub();
 
-  const uid = currentUser.uid;
+  var uid = currentUser.uid;
   taReportUnsub = db.collection('laporan')
     .where('userId', '==', uid)
-    .orderBy('createdAt', 'desc')
-    .limit(100)
+    .limit(200)
     .onSnapshot(function(snap) {
       cachedTAReports = [];
       snap.forEach(function(d) {
-        cachedTAReports.push({ id: d.id, data: d.data() });
+        var data = normalizeReport(d.data());
+        cachedTAReports.push({ id: d.id, data: data });
       });
-      // Auto-update UI based on current active tab
+      // Sort client-side by createdAt desc
+      sortReportsByDate(cachedTAReports);
+      // Auto-update UI
       renderTADashboard();
       renderRiwayat();
     }, function(err) {
       console.error('TA realtime error:', err);
-      // On error, show empty state instead of stuck "Memuat..."
-      var container = document.getElementById('recentList');
-      if (container && container.querySelector('.empty-state') === null && container.textContent.indexOf('Memuat') >= 0) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+      var el1 = document.getElementById('recentList');
+      var el2 = document.getElementById('riwayatList');
+      var emptyHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+      if (el1) el1.innerHTML = emptyHTML;
+      if (el2) el2.innerHTML = emptyHTML;
+
+      // v6: Show helpful error for missing index
+      if (err.code === 'failed-precondition') {
+        showToast('Index Firestore belum dibuat. Lihat console untuk link pembuatan.', 'error');
+        console.error('FIRESTORE INDEX NEEDED. Open this URL to create it:', err.message);
+      } else {
+        showToast('Gagal memuat laporan: ' + (err.message || ''), 'error');
       }
     });
 }
 
 // --- Admin Real-time: Listen to all reports ---
+// v6: Single-field orderBy is auto-indexed, no composite needed
 function initAdminReportRealtime() {
   if (!currentUser || currentUser.role !== 'admin') return;
   if (adminReportUnsub) adminReportUnsub();
@@ -225,40 +296,46 @@ function initAdminReportRealtime() {
     .onSnapshot(function(snap) {
       cachedAdminReports = [];
       snap.forEach(function(d) {
-        cachedAdminReports.push({ id: d.id, data: d.data() });
+        var data = normalizeReport(d.data());
+        cachedAdminReports.push({ id: d.id, data: data });
       });
       renderAdminDashStats();
       renderAdminReportList();
     }, function(err) {
       console.error('Admin reports realtime error:', err);
-      var container = document.getElementById('adminRepList');
-      if (container && container.textContent.indexOf('Memuat') >= 0) {
-        container.innerHTML = '<div class="empty-state"><h4>Gagal memuat data</h4></div>';
-      }
+      var el = document.getElementById('adminRepList');
+      if (el) el.innerHTML = '<div class="empty-state"><h4>Gagal memuat laporan</h4><p>' + esc(err.message || 'Terjadi kesalahan') + '</p></div>';
+      showToast('Gagal memuat laporan admin', 'error');
     });
 }
 
 // --- Admin Real-time: Listen to all TA users ---
+// v6: Removed orderBy to avoid composite index (role + createdAt)
 function initAdminUserRealtime() {
   if (!currentUser || currentUser.role !== 'admin') return;
   if (adminUserUnsub) adminUserUnsub();
 
   adminUserUnsub = db.collection('users')
     .where('role', '==', 'ta')
-    .orderBy('createdAt', 'desc')
+    .limit(200)
     .onSnapshot(function(snap) {
       cachedAdminUsers = [];
       snap.forEach(function(d) {
         cachedAdminUsers.push({ id: d.id, data: d.data() });
       });
+      // Sort client-side by createdAt desc
+      cachedAdminUsers.sort(function(a, b) {
+        var ta = a.data.createdAt ? (a.data.createdAt.toDate ? a.data.createdAt.toDate() : new Date(a.data.createdAt)) : new Date(0);
+        var tb = b.data.createdAt ? (b.data.createdAt.toDate ? b.data.createdAt.toDate() : new Date(b.data.createdAt)) : new Date(0);
+        return tb - ta;
+      });
       renderAdminDashUsers();
       renderAdminUserList();
     }, function(err) {
       console.error('Admin users realtime error:', err);
-      var container = document.getElementById('adminUserList');
-      if (container && container.textContent.indexOf('Memuat') >= 0) {
-        container.innerHTML = '<div class="empty-state"><h4>Gagal memuat data</h4></div>';
-      }
+      var el = document.getElementById('adminUserList');
+      if (el) el.innerHTML = '<div class="empty-state"><h4>Gagal memuat data user</h4><p>' + esc(err.message || 'Terjadi kesalahan') + '</p></div>';
+      showToast('Gagal memuat data user', 'error');
     });
 }
 
@@ -272,18 +349,14 @@ function initAdminRealtime() {
 // PAGE NAVIGATION
 // ============================================================
 function switchPage(name) {
-  // Hide all pages
   document.querySelectorAll('.tab-page').forEach(function(p) { p.classList.remove('active'); });
-  // Show selected
   var el = document.getElementById('page_' + name);
   if (el) el.classList.add('active');
 
-  // Update nav items
   document.querySelectorAll('.nav-item').forEach(function(n) {
     n.classList.toggle('active', n.dataset.page === name);
   });
 
-  // Update title
   var titles = {
     home: 'Beranda', buat: 'Buat Laporan', riwayat: 'Riwayat', profil: 'Profil',
     a_home: 'Dashboard', a_laporan: 'Kelola Laporan', a_user: 'Kelola TA'
@@ -291,7 +364,6 @@ function switchPage(name) {
   var pt = document.getElementById('pageTitle');
   if (pt && titles[name]) pt.textContent = titles[name];
 
-  // For real-time, just re-render from cached data (no fetch needed)
   if (name === 'home') renderTADashboard();
   if (name === 'buat') loadBuatForm();
   if (name === 'riwayat') renderRiwayat();
@@ -493,11 +565,10 @@ function rmPhoto(btn, url) {
 }
 
 // ============================================================
-// NOTIFICATIONS (FIXED: includes 'admin' target for admin users)
+// NOTIFICATIONS
 // ============================================================
 function initNotifs(myUid, isAdmin) {
   if (notifUnsubscribe) { notifUnsubscribe(); notifUnsubscribe = null; }
-  // For admin, also listen to target='admin' (string used by TAs when sending reports)
   var targets = isAdmin ? [myUid, 'admin', 'all'] : [myUid, 'all'];
   notifUnsubscribe = db.collection('notifikasi')
     .where('target', 'in', targets)
@@ -506,12 +577,10 @@ function initNotifs(myUid, isAdmin) {
     .onSnapshot(function(snap) {
       var count = 0;
       snap.forEach(function(d) { if (!d.data().isRead) count++; });
-      // Update bell dots
       var dot = document.getElementById('bellDot');
       var cnt = document.getElementById('bellCount');
       if (dot) dot.classList.toggle('show', count > 0);
       if (cnt) { cnt.textContent = count; cnt.classList.toggle('show', count > 0); }
-      // Update nav badge
       document.querySelectorAll('.nav-badge').forEach(function(b) {
         b.textContent = count; b.classList.toggle('show', count > 0);
       });
@@ -608,7 +677,6 @@ function renderTADashboard() {
   $s('s_approved', approved);
   $s('s_rejected', rejected);
 
-  // Recent 5 reports
   var container = document.getElementById('recentList');
   if (!container) return;
 
@@ -631,7 +699,6 @@ function renderRiwayat() {
   var period = periodEl ? periodEl.value : 'all';
   var filtered = filterByPeriod(cachedTAReports, period);
 
-  // Stats for filtered data
   var ap = 0, pe = 0;
   filtered.forEach(function(item) {
     if (item.data.status === 'approved') ap++;
@@ -656,34 +723,45 @@ function renderRiwayat() {
   container.innerHTML = h;
 }
 
-// Fallback: load data once (used if real-time not active)
+// Fallback: load TA data once (used if real-time not active)
+// v6: Removed orderBy from compound query
 async function loadTADashboard() {
   if (!currentUser) return;
-  // If realtime is active, just re-render
   if (taReportUnsub) { renderTADashboard(); return; }
   var uid = currentUser.uid;
   try {
-    var total = await db.collection('laporan').where('userId', '==', uid).get();
-    var pending = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'pending').get();
-    var approved = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'approved').get();
-    var rejected = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'rejected').get();
+    var totalSnap = await db.collection('laporan').where('userId', '==', uid).get();
+    var pendingSnap = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'pending').get();
+    var approvedSnap = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'approved').get();
+    var rejectedSnap = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'rejected').get();
 
-    $s('s_total', total.size);
-    $s('s_pending', pending.size);
-    $s('s_approved', approved.size);
-    $s('s_rejected', rejected.size);
+    $s('s_total', totalSnap.size);
+    $s('s_pending', pendingSnap.size);
+    $s('s_approved', approvedSnap.size);
+    $s('s_rejected', rejectedSnap.size);
 
-    var snap = await db.collection('laporan').where('userId', '==', uid).orderBy('createdAt', 'desc').limit(5).get();
+    // Get all reports and sort client-side
+    var allReports = [];
+    totalSnap.forEach(function(d) { allReports.push({ id: d.id, data: normalizeReport(d.data()) }); });
+    allReports.sort(function(a, b) {
+      var ta = a.data.createdAt ? (a.data.createdAt.toDate ? a.data.createdAt.toDate() : new Date(a.data.createdAt)) : new Date(0);
+      var tb = b.data.createdAt ? (b.data.createdAt.toDate ? b.data.createdAt.toDate() : new Date(b.data.createdAt)) : new Date(0);
+      return tb - ta;
+    });
+
     var container = document.getElementById('recentList');
     if (!container) return;
 
-    if (snap.empty) {
+    if (!allReports.length) {
       container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
       return;
     }
 
     var h = '';
-    snap.forEach(function(d) { h += renderReportCard(d.data(), d.id); });
+    var limit = Math.min(5, allReports.length);
+    for (var i = 0; i < limit; i++) {
+      h += renderReportCard(allReports[i].data, allReports[i].id);
+    }
     container.innerHTML = h;
   } catch (e) {
     console.error('loadTADashboard error:', e);
@@ -693,10 +771,11 @@ async function loadTADashboard() {
   }
 }
 
+// v6: renderReportCard uses normalized data (fotoUrl already filtered, type already normalized)
 function renderReportCard(r, id) {
   var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
   var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
-  var fotoCount = r.fotoUrl ? (Array.isArray(r.fotoUrl) ? r.fotoUrl.length : 1) : 0;
+  var fotoCount = (r.fotoUrl && Array.isArray(r.fotoUrl)) ? r.fotoUrl.length : 0;
   var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
 
   return '<div class="report-item" onclick="viewReport(\'' + id + '\')">' +
@@ -794,7 +873,6 @@ async function submitReport() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    // Notify admin (target = 'admin' string)
     await db.collection('notifikasi').add({
       judul: 'Laporan Baru',
       pesan: nama + ' mengirim laporan: "' + judul + '"',
@@ -807,13 +885,11 @@ async function submitReport() {
     hideLoading();
     showToast('Laporan berhasil dikirim!', 'success');
 
-    // Clear form
     $sv('rJudul', '');
     $sv('rIsi', '');
     uploadedPhotos = [];
     document.getElementById('rPhotoGrid').innerHTML = '';
 
-    // Switch to riwayat - real-time listener will auto-update data
     switchPage('riwayat');
   } catch (e) {
     hideLoading();
@@ -823,9 +899,9 @@ async function submitReport() {
 }
 
 // --- Riwayat Laporan (fallback if no realtime) ---
+// v6: Removed orderBy from compound query
 async function loadLaporan() {
   if (!currentUser) return;
-  // If realtime is active, just re-render with current filter
   if (taReportUnsub) { renderRiwayat(); return; }
   var period = document.getElementById('fPeriod') ? document.getElementById('fPeriod').value : 'all';
   var container = document.getElementById('riwayatList');
@@ -835,30 +911,35 @@ async function loadLaporan() {
   try {
     var q = db.collection('laporan');
     if (currentUser.role !== 'admin') q = q.where('userId', '==', currentUser.uid);
-    if (period !== 'all') {
-      var range = getDateRange(period);
-      q = q.where('createdAt', '>=', range.start).where('createdAt', '<', range.end);
-    }
-    q = q.orderBy('createdAt', 'desc').limit(100);
+    q = q.limit(200);
     var snap = await q.get();
 
+    // Filter and sort client-side
+    var allReports = [];
+    snap.forEach(function(d) { allReports.push({ id: d.id, data: normalizeReport(d.data()) }); });
+
+    // Filter by period
+    var filtered = filterByPeriod(allReports, period);
+
     var ap = 0, pe = 0;
-    snap.forEach(function(d) {
-      var s = d.data().status;
-      if (s === 'approved') ap++;
-      else if (s === 'pending') pe++;
+    filtered.forEach(function(item) {
+      if (item.data.status === 'approved') ap++;
+      else if (item.data.status === 'pending') pe++;
     });
-    $s('f_total', snap.size);
+    $s('f_total', filtered.length);
     $s('f_approved', ap);
     $s('f_pending', pe);
 
-    if (!snap.size) {
+    if (!filtered.length) {
       container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4><p>Belum ada laporan untuk periode ini</p></div>';
       return;
     }
 
+    // Sort client-side
+    sortReportsByDate(filtered);
+
     var h = '';
-    snap.forEach(function(d) { h += renderReportCard(d.data(), d.id); });
+    filtered.forEach(function(item) { h += renderReportCard(item.data, item.id); });
     container.innerHTML = h;
   } catch (e) {
     console.error('loadLaporan error:', e);
@@ -876,22 +957,21 @@ async function viewReport(id) {
   try {
     var doc = await db.collection('laporan').doc(id).get();
     if (!doc.exists) { body.innerHTML = '<p style="text-align:center;color:var(--text3)">Tidak ditemukan</p>'; return; }
-    var r = doc.data();
+    var r = normalizeReport(doc.data());
     var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
     var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
 
-    // Photos
+    // Photos (already normalized - fotoUrl is now always a clean array of valid URLs)
     var photos = '';
-    var fotoList = r.fotoUrl ? (Array.isArray(r.fotoUrl) ? r.fotoUrl : [r.fotoUrl]) : [];
-    if (fotoList.length > 0) {
+    if (r.fotoUrl && r.fotoUrl.length > 0) {
       var photoItems = '';
-      fotoList.forEach(function(f) {
+      r.fotoUrl.forEach(function(f) {
         photoItems += '<div class="photo-thumb"><img src="' + f + '" onclick="openLightbox(\'' + f + '\')" loading="lazy"></div>';
       });
-      photos = '<div class="detail-field mt-16"><label>Foto Kegiatan (' + fotoList.length + ')</label><div class="photo-grid">' + photoItems + '</div></div>';
+      photos = '<div class="detail-field mt-16"><label>Foto Kegiatan (' + r.fotoUrl.length + ')</label><div class="photo-grid">' + photoItems + '</div></div>';
     }
 
-    // Admin action buttons (only for admin on pending reports)
+    // Admin action buttons
     var adminActions = '';
     if (currentUser && currentUser.role === 'admin' && r.status === 'pending') {
       adminActions = '<div class="mt-16" style="padding-top:16px;border-top:1px solid var(--border)">' +
@@ -900,6 +980,14 @@ async function viewReport(id) {
           '<button class="btn btn-green btn-block" onclick="approveReport(\'' + id + '\')">\u2713 Setujui</button>' +
           '<button class="btn btn-red btn-block" onclick="rejectReport(\'' + id + '\')">\u2717 Tolak</button>' +
         '</div>' +
+      '</div>';
+    }
+
+    // Cetak Word button for admin
+    var printBtn = '';
+    if (currentUser && currentUser.role === 'admin') {
+      printBtn = '<div class="mt-16 no-print" style="padding-top:16px;border-top:1px solid var(--border)">' +
+        '<button class="btn btn-outline btn-block" onclick="printSingleReport(\'' + id + '\')">\uD83D\uDDA8 Cetak ke Word</button>' +
       '</div>';
     }
 
@@ -915,7 +1003,8 @@ async function viewReport(id) {
       '<div class="detail-field"><label>Isi Laporan</label><div class="detail-isi">' + esc(r.isi) + '</div></div>' +
       (r.catatanAdmin ? '<div class="detail-field"><label>Catatan Admin</label><div class="detail-note">' + esc(r.catatanAdmin) + '</div></div>' : '') +
       photos +
-      adminActions;
+      adminActions +
+      printBtn;
   } catch (e) {
     console.error('viewReport error:', e);
     body.innerHTML = '<p style="text-align:center;color:var(--text3)">Gagal memuat</p>';
@@ -926,25 +1015,21 @@ async function viewReport(id) {
 // ADMIN MODULE (Real-Time)
 // ============================================================
 
-// --- Render Admin Dashboard Stats from cached data ---
 function renderAdminDashStats() {
   var totalTA = 0, pendUser = 0, totalRep = 0, pendRep = 0, okRep = 0, monthRep = 0;
   var now = new Date();
   var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  // User stats from cached users
   cachedAdminUsers.forEach(function(item) {
     totalTA++;
     if (item.data.status === 'pending') pendUser++;
   });
 
-  // Report stats from cached reports
   cachedAdminReports.forEach(function(item) {
     totalRep++;
     if (item.data.status === 'pending') pendRep++;
     else if (item.data.status === 'approved') okRep++;
-    // Monthly count
     if (item.data.createdAt) {
       var ts = item.data.createdAt.toDate ? item.data.createdAt.toDate() : new Date(item.data.createdAt);
       if (ts >= monthStart && ts < monthEnd) monthRep++;
@@ -959,7 +1044,6 @@ function renderAdminDashStats() {
   $s('a_monthRep', monthRep);
 }
 
-// --- Render Admin Pending Users from cached data ---
 function renderAdminDashUsers() {
   var el = document.getElementById('pendUsers');
   if (!el) return;
@@ -990,7 +1074,7 @@ function renderAdminDashUsers() {
   el.innerHTML = h;
 }
 
-// --- Render Admin Reports from cached data (with period filter) ---
+// --- Render Admin Reports from cached data (with period filter + checkboxes) ---
 function renderAdminReportList() {
   var periodEl = document.getElementById('aPeriod');
   var period = periodEl ? periodEl.value : 'all';
@@ -1004,19 +1088,42 @@ function renderAdminReportList() {
     return;
   }
 
-  var h = '';
+  var isAdmin = currentUser && currentUser.role === 'admin';
+
+  var header = '';
+  if (isAdmin) {
+    var allChecked = filtered.length > 0 && filtered.every(function(item) { return selectedReportIds.has(item.id); });
+    header = '<div class="report-item" style="background:var(--bg);cursor:default;border-bottom:1px solid var(--border)">' +
+      '<div style="display:flex;align-items:center;gap:10px;width:100%">' +
+        '<input type="checkbox" ' + (allChecked ? 'checked' : '') + ' onchange="toggleSelectAllReports(this.checked)" style="width:18px;height:18px;cursor:pointer;accent-color:var(--red)">' +
+        '<span style="font-size:12px;font-weight:600;color:var(--text2)">Pilih Semua (' + filtered.length + ')</span>' +
+        (selectedReportIds.size > 0 ? '<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="event.stopPropagation();openPrintOptions()">\uD83D\uDDA8 Cetak (' + selectedReportIds.size + ')</button>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  var h = header;
   filtered.forEach(function(item) {
     var r = item.data;
     var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
     var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
     var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
+    var isChecked = selectedReportIds.has(item.id);
 
     var quickBtns = '';
-    if (r.status === 'pending' && currentUser && currentUser.role === 'admin') {
+    if (r.status === 'pending' && isAdmin) {
       quickBtns = ' &middot; <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
     }
 
-    h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')">' +
+    var checkbox = '';
+    if (isAdmin) {
+      checkbox = '<div style="display:flex;align-items:center;margin-right:10px" onclick="event.stopPropagation()">' +
+        '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleReportSelect(\'' + item.id + '\', this.checked)" style="width:18px;height:18px;cursor:pointer;accent-color:var(--red)">' +
+      '</div>';
+    }
+
+    h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')" style="display:flex;align-items:center">' +
+      checkbox +
       '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
       '<div class="ri-body">' +
         '<div class="ri-title">' + esc(r.judul) + '</div>' +
@@ -1031,7 +1138,6 @@ function renderAdminReportList() {
   container.innerHTML = h;
 }
 
-// --- Render Admin User List from cached data ---
 function renderAdminUserList() {
   var container = document.getElementById('adminUserList');
   if (!container) return;
@@ -1064,7 +1170,7 @@ function renderAdminUserList() {
   container.innerHTML = h;
 }
 
-// --- Fallback: load admin data once (used if realtime not active) ---
+// --- Fallback: load admin data once ---
 async function loadAdminDash() {
   if (!currentUser) return;
   if (adminReportUnsub && adminUserUnsub) { renderAdminDashStats(); renderAdminDashUsers(); return; }
@@ -1127,7 +1233,6 @@ async function approveUser(uid) {
     });
     hideLoading();
     showToast('User disetujui', 'success');
-    // Real-time listener will auto-update the UI
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
@@ -1149,11 +1254,10 @@ async function rejectUser(uid) {
     });
     hideLoading();
     showToast('User ditolak', 'success');
-    // Real-time listener will auto-update the UI
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
-// Fallback: load admin reports once
+// v6: Fallback - removed orderBy from compound query, sort client-side
 async function loadAdminReports() {
   if (!currentUser) return;
   if (adminReportUnsub) { renderAdminReportList(); return; }
@@ -1163,34 +1267,35 @@ async function loadAdminReports() {
   container.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
 
   try {
-    var q = db.collection('laporan');
-    if (period !== 'all') {
-      var range = getDateRange(period);
-      q = q.where('createdAt', '>=', range.start).where('createdAt', '<', range.end);
-    }
-    q = q.orderBy('createdAt', 'desc').limit(100);
-    var snap = await q.get();
+    var snap = await db.collection('laporan').limit(200).get();
 
-    if (!snap.size) {
+    var allReports = [];
+    snap.forEach(function(d) { allReports.push({ id: d.id, data: normalizeReport(d.data()) }); });
+
+    // Filter by period
+    var filtered = filterByPeriod(allReports, period);
+    // Sort client-side
+    sortReportsByDate(filtered);
+
+    if (!filtered.length) {
       container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4></div>';
       return;
     }
 
     var h = '';
-    snap.forEach(function(d) {
-      var r = d.data();
+    filtered.forEach(function(item) {
+      var r = item.data;
       var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
       var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
       var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
 
-      h += '<div class="report-item" onclick="viewReport(\'' + d.id + '\')">' +
+      h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')">' +
         '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
         '<div class="ri-body">' +
           '<div class="ri-title">' + esc(r.judul) + '</div>' +
           '<div class="ri-sub">' + esc(r.nama || '-') + ' &middot; ' + formatDate(r.tanggal) + '</div>' +
           '<div class="ri-meta">' +
             '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
-            (r.status === 'pending' ? ' &middot; <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + d.id + '\')">\u2713</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + d.id + '\')">\u2717</button>' : '') +
           '</div>' +
         '</div>' +
       '</div>';
@@ -1202,7 +1307,7 @@ async function loadAdminReports() {
   }
 }
 
-// Fallback: load admin users once
+// v6: Fallback - removed orderBy from compound query
 async function loadAdminUsers() {
   if (!currentUser) return;
   if (adminUserUnsub) { renderAdminUserList(); return; }
@@ -1211,15 +1316,25 @@ async function loadAdminUsers() {
   container.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
 
   try {
-    var snap = await db.collection('users').where('role', '==', 'ta').orderBy('createdAt', 'desc').get();
+    var snap = await db.collection('users').where('role', '==', 'ta').limit(200).get();
     if (!snap.size) {
       container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDC65</div><h4>Belum ada Tenaga Ahli</h4></div>';
       return;
     }
 
+    var allUsers = [];
+    snap.forEach(function(d) { allUsers.push({ id: d.id, data: d.data() }); });
+    // Sort client-side
+    allUsers.sort(function(a, b) {
+      var ta = a.data.createdAt ? (a.data.createdAt.toDate ? a.data.createdAt.toDate() : new Date(a.data.createdAt)) : new Date(0);
+      var tb = b.data.createdAt ? (b.data.createdAt.toDate ? b.data.createdAt.toDate() : new Date(b.data.createdAt)) : new Date(0);
+      return tb - ta;
+    });
+
     var h = '';
-    snap.forEach(function(d) {
-      var u = d.data();
+    allUsers.forEach(function(item) {
+      var d = item;
+      var u = d.data;
       var statusClass = u.status === 'active' ? 'active' : u.status === 'rejected' ? 'rejected' : 'pending';
       var statusText = u.status === 'active' ? 'Aktif' : u.status === 'rejected' ? 'Ditolak' : 'Menunggu';
 
@@ -1263,7 +1378,6 @@ async function approveReport(id) {
     hideLoading();
     showToast('Laporan disetujui', 'success');
     closeModal('reportModal');
-    // Real-time listener will auto-update
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
@@ -1287,7 +1401,6 @@ async function rejectReport(id) {
     hideLoading();
     showToast('Laporan ditolak', 'success');
     closeModal('reportModal');
-    // Real-time listener will auto-update
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
@@ -1307,7 +1420,6 @@ async function quickApprove(id) {
     });
     hideLoading();
     showToast('Disetujui', 'success');
-    // Real-time listener will auto-update
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
@@ -1329,7 +1441,6 @@ async function quickReject(id) {
     });
     hideLoading();
     showToast('Ditolak', 'success');
-    // Real-time listener will auto-update
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
@@ -1363,3 +1474,345 @@ async function sendBroadcast() {
 }
 
 function printPage() { window.print(); }
+
+// ============================================================
+// WORD EXPORT MODULE (v6)
+// ============================================================
+
+function toggleReportSelect(id, checked) {
+  if (checked) {
+    selectedReportIds.add(id);
+  } else {
+    selectedReportIds.delete(id);
+  }
+  renderAdminReportList();
+}
+
+function toggleSelectAllReports(checked) {
+  var periodEl = document.getElementById('aPeriod');
+  var period = periodEl ? periodEl.value : 'all';
+  var filtered = filterByPeriod(cachedAdminReports, period);
+
+  if (checked) {
+    filtered.forEach(function(item) { selectedReportIds.add(item.id); });
+  } else {
+    selectedReportIds.clear();
+  }
+  renderAdminReportList();
+}
+
+function openPrintOptions() {
+  var count = selectedReportIds.size;
+  if (count === 0) {
+    showToast('Pilih laporan terlebih dahulu', 'warning');
+    return;
+  }
+
+  var existingModal = document.getElementById('printOptionsModal');
+  if (existingModal) existingModal.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'printOptionsModal';
+  modal.className = 'modal-overlay show';
+  modal.onclick = function(e) { if (e.target === modal) closeModal('printOptionsModal'); };
+  modal.innerHTML =
+    '<div class="modal-sheet" style="max-width:400px">' +
+      '<div class="modal-handle"></div>' +
+      '<div class="modal-top">' +
+        '<h3>\uD83D\uDDA8 Cetak Laporan</h3>' +
+        '<button class="modal-close" onclick="closeModal(\'printOptionsModal\')">&times;</button>' +
+      '</div>' +
+      '<div class="modal-content">' +
+        '<p style="margin-bottom:16px;color:var(--text2);font-size:13px">' + count + ' laporan dipilih</p>' +
+        '<div style="display:flex;flex-direction:column;gap:10px">' +
+          '<button class="btn btn-red btn-block" onclick="printSelectedReports()">\uD83D\uDDA8 Cetak ' + count + ' Laporan Terpilih ke Word</button>' +
+          '<button class="btn btn-outline btn-block" onclick="printAllReports()">\uD83D\uDCCB Cetak Semua Laporan (Filtered) ke Word</button>' +
+          '<button class="btn btn-outline btn-block" onclick="printByPeriod(\'Harian\', \'daily\')">\uD83D\uDCC5 Cetak Laporan Hari Ini</button>' +
+          '<button class="btn btn-outline btn-block" onclick="printByPeriod(\'Bulanan\', \'monthly\')">\uD83D\uDCC6 Cetak Laporan Bulan Ini</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+async function printSingleReport(id) {
+  showLoading();
+  try {
+    var doc = await db.collection('laporan').doc(id).get();
+    if (!doc.exists) { hideLoading(); showToast('Laporan tidak ditemukan', 'error'); return; }
+    var r = normalizeReport(doc.data());
+    var reportData = [{ id: doc.id, data: r }];
+    var title = 'Laporan - ' + (r.judul || 'Tanpa Judul');
+    var html = await generateWordHTML(reportData, title);
+    var filename = 'Laporan_' + (r.judul || 'report').replace(/[^a-zA-Z0-9\u00C0-\u024F]/g, '_') + '.doc';
+    downloadWordDoc(html, filename);
+    hideLoading();
+    showToast('Dokumen Word berhasil diunduh', 'success');
+  } catch (e) {
+    hideLoading();
+    console.error('printSingleReport error:', e);
+    showToast('Gagal mencetak: ' + e.message, 'error');
+  }
+}
+
+async function printSelectedReports() {
+  if (selectedReportIds.size === 0) {
+    showToast('Pilih laporan terlebih dahulu', 'warning');
+    return;
+  }
+  closeModal('printOptionsModal');
+  showLoading();
+
+  try {
+    var reports = [];
+    var idsToFetch = [];
+    selectedReportIds.forEach(function(id) {
+      var cached = cachedAdminReports.find(function(r) { return r.id === id; });
+      if (cached) {
+        reports.push(cached);
+      } else {
+        idsToFetch.push(id);
+      }
+    });
+
+    if (idsToFetch.length > 0) {
+      for (var i = 0; i < idsToFetch.length; i++) {
+        var doc = await db.collection('laporan').doc(idsToFetch[i]).get();
+        if (doc.exists) {
+          reports.push({ id: doc.id, data: normalizeReport(doc.data()) });
+        }
+      }
+    }
+
+    reports.sort(function(a, b) {
+      var ta = a.data.createdAt ? (a.data.createdAt.toDate ? a.data.createdAt.toDate() : new Date(a.data.createdAt)) : new Date(0);
+      var tb = b.data.createdAt ? (b.data.createdAt.toDate ? b.data.createdAt.toDate() : new Date(b.data.createdAt)) : new Date(0);
+      return tb - ta;
+    });
+
+    var html = await generateWordHTML(reports, 'Laporan Terpilih (' + reports.length + ')');
+    var filename = 'Laporan_Terpilih_' + reports.length + '.doc';
+    downloadWordDoc(html, filename);
+    hideLoading();
+    showToast(reports.length + ' laporan berhasil dicetak ke Word', 'success');
+  } catch (e) {
+    hideLoading();
+    console.error('printSelectedReports error:', e);
+    showToast('Gagal mencetak: ' + e.message, 'error');
+  }
+}
+
+async function printAllReports() {
+  closeModal('printOptionsModal');
+  var periodEl = document.getElementById('aPeriod');
+  var period = periodEl ? periodEl.value : 'all';
+  var filtered = filterByPeriod(cachedAdminReports, period);
+
+  if (filtered.length === 0) {
+    showToast('Tidak ada laporan untuk dicetak', 'warning');
+    return;
+  }
+
+  showLoading();
+  try {
+    var periodLabel = period === 'all' ? 'Semua Periode' : period === 'daily' ? 'Hari Ini' : period === 'monthly' ? 'Bulan Ini' : period === 'yearly' ? 'Tahun Ini' : period;
+    var html = await generateWordHTML(filtered, 'Semua Laporan - ' + periodLabel + ' (' + filtered.length + ')');
+    var filename = 'Laporan_' + periodLabel.replace(/\s/g, '_') + '.doc';
+    downloadWordDoc(html, filename);
+    hideLoading();
+    showToast(filtered.length + ' laporan berhasil dicetak ke Word', 'success');
+  } catch (e) {
+    hideLoading();
+    console.error('printAllReports error:', e);
+    showToast('Gagal mencetak: ' + e.message, 'error');
+  }
+}
+
+async function printByPeriod(periodLabel, period) {
+  closeModal('printOptionsModal');
+  var filtered = filterByPeriod(cachedAdminReports, period);
+
+  if (filtered.length === 0) {
+    showToast('Tidak ada laporan untuk periode ini', 'warning');
+    return;
+  }
+
+  showLoading();
+  try {
+    var html = await generateWordHTML(filtered, 'Laporan ' + periodLabel + ' (' + filtered.length + ')');
+    var filename = 'Laporan_' + periodLabel.replace(/\s/g, '_') + '.doc';
+    downloadWordDoc(html, filename);
+    hideLoading();
+    showToast(filtered.length + ' laporan berhasil dicetak ke Word', 'success');
+  } catch (e) {
+    hideLoading();
+    console.error('printByPeriod error:', e);
+    showToast('Gagal mencetak: ' + e.message, 'error');
+  }
+}
+
+// --- Generate Word-compatible HTML from reports ---
+// v6: Uses normalizeReport data, handles type/tipe, clean fotoUrl array
+async function generateWordHTML(reports, title) {
+  var reportsWithImages = [];
+  for (var i = 0; i < reports.length; i++) {
+    var item = reports[i];
+    var r = item.data || item;
+    var fotoList = (r.fotoUrl && Array.isArray(r.fotoUrl)) ? r.fotoUrl : [];
+    var base64Images = [];
+
+    for (var j = 0; j < fotoList.length; j++) {
+      try {
+        base64Images.push(await urlToBase64(fotoList[j]));
+      } catch (e) {
+        base64Images.push(fotoList[j]);
+      }
+    }
+
+    reportsWithImages.push({
+      data: r,
+      images: base64Images
+    });
+  }
+
+  var now = new Date();
+  var timestamp = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  var html =
+    '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+    'xmlns:w="urn:schemas-microsoft-com:office:word" ' +
+    'xmlns="http://www.w3.org/TR/REC-html40">' +
+    '<head><meta charset="utf-8">' +
+    '<style>' +
+      'body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1a1a1a; margin: 40px; line-height: 1.6; }' +
+      '.header { text-align: center; border-bottom: 3px solid #c4161c; padding-bottom: 16px; margin-bottom: 24px; }' +
+      '.header h1 { font-size: 16pt; color: #c4161c; margin: 0 0 4px; font-weight: 700; }' +
+      '.header h2 { font-size: 12pt; color: #666; margin: 0; font-weight: 400; }' +
+      '.header .subtitle { font-size: 10pt; color: #999; margin-top: 8px; }' +
+      '.title { font-size: 14pt; font-weight: 700; text-align: center; margin: 20px 0; color: #1a1a1a; }' +
+      '.report { margin-bottom: 24px; page-break-inside: avoid; }' +
+      '.report-header { background: #f8f8f8; padding: 12px 16px; border-left: 4px solid #c4161c; margin-bottom: 12px; }' +
+      '.report-header h3 { font-size: 13pt; margin: 0 0 4px; color: #1a1a1a; }' +
+      '.report-meta { font-size: 9pt; color: #888; margin: 0; }' +
+      '.field { margin-bottom: 8px; }' +
+      '.field label { font-size: 9pt; font-weight: 700; color: #888; text-transform: uppercase; display: block; margin-bottom: 2px; letter-spacing: 0.5px; }' +
+      '.field p { margin: 0; font-size: 11pt; }' +
+      '.field .value { font-size: 11pt; color: #1a1a1a; }' +
+      '.isi { background: #f5f5f5; padding: 12px 16px; border-radius: 4px; font-size: 11pt; line-height: 1.7; white-space: pre-wrap; margin: 8px 0; }' +
+      '.catatan { background: #fff7ed; padding: 10px 16px; border-left: 3px solid #ea580c; border-radius: 4px; font-size: 10pt; color: #ea580c; margin: 8px 0; }' +
+      '.status-approved { color: #16a34a; font-weight: 700; }' +
+      '.status-pending { color: #ea580c; font-weight: 700; }' +
+      '.status-rejected { color: #c4161c; font-weight: 700; }' +
+      '.photos { margin: 12px 0; }' +
+      '.photos img { max-width: 400px; max-height: 300px; margin: 4px 8px 4px 0; border: 1px solid #e8e8e8; border-radius: 4px; }' +
+      '.page-break { page-break-before: always; border-top: 1px dashed #ccc; padding-top: 16px; margin-top: 16px; }' +
+      '.footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e8e8e8; text-align: center; font-size: 9pt; color: #999; }' +
+      '@page { margin: 2cm; }' +
+    '</style>' +
+    '</head><body>' +
+
+    '<div class="header">' +
+      '<h1>LAPORAN TENAGA AHLI</h1>' +
+      '<h2>Fraksi PDI Perjuangan Kab. Kepulauan Meranti</h2>' +
+      '<div class="subtitle">' + esc(title) + '</div>' +
+    '</div>' +
+
+    '<div class="title">' + esc(title) + '</div>';
+
+  for (var k = 0; k < reportsWithImages.length; k++) {
+    var item = reportsWithImages[k];
+    var r = item.data;
+    var imgs = item.images;
+
+    if (k > 0) {
+      html += '<div class="page-break"></div>';
+    }
+
+    var reportType = r.type || 'Harian';
+    var statusClass = r.status === 'approved' ? 'status-approved' : r.status === 'rejected' ? 'status-rejected' : 'status-pending';
+    var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+
+    html += '<div class="report">' +
+      '<div class="report-header">' +
+        '<h3>' + esc(r.judul || 'Tanpa Judul') + '</h3>' +
+        '<p class="report-meta">' + esc(r.nama || '-') + ' &middot; ' + formatDate(r.tanggal) + ' &middot; ' + esc(reportType) + ' &middot; <span class="' + statusClass + '">' + statusText + '</span></p>' +
+      '</div>' +
+
+      '<div class="field"><label>Tenaga Ahli</label><p class="value"><b>' + esc(r.nama || '-') + '</b></p></div>' +
+      '<div class="field"><label>Tanggal Kegiatan</label><p class="value">' + formatDate(r.tanggal) + '</p></div>' +
+      '<div class="field"><label>Tipe Laporan</label><p class="value">' + esc(reportType) + '</p></div>' +
+      '<div class="field"><label>Status</label><p class="value"><span class="' + statusClass + '">' + statusText + '</span></p></div>' +
+      '<div class="field"><label>Isi Laporan</label></div>' +
+      '<div class="isi">' + esc(r.isi || '-') + '</div>';
+
+    if (r.catatanAdmin) {
+      html += '<div class="field"><label>Catatan Admin</label></div>' +
+        '<div class="catatan">' + esc(r.catatanAdmin) + '</div>';
+    }
+
+    if (imgs.length > 0) {
+      html += '<div class="field"><label>Foto Kegiatan (' + imgs.length + ')</label></div>' +
+        '<div class="photos">';
+      for (var p = 0; p < imgs.length; p++) {
+        html += '<img src="' + imgs[p] + '">';
+      }
+      html += '</div>';
+    }
+
+    html += '</div>';
+  }
+
+  html += '<div class="footer">' +
+    'Dokumen ini dicetak otomatis dari Sistem Laporan Tenaga Ahli<br>' +
+    'Fraksi PDI Perjuangan Kab. Kepulauan Meranti<br>' +
+    'Tanggal cetak: ' + timestamp +
+  '</div>';
+
+  html += '</body></html>';
+  return html;
+}
+
+// --- Convert image URL to base64 for Word embedding ---
+function urlToBase64(url) {
+  return new Promise(function(resolve, reject) {
+    if (url && url.indexOf('data:') === 0) { resolve(url); return; }
+    if (!url || url.indexOf('http') !== 0) { resolve(url); return; }
+
+    var img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.onload = function() {
+      try {
+        var canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width;
+        canvas.height = img.naturalHeight || img.height;
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        var dataURL = canvas.toDataURL('image/jpeg', 0.85);
+        resolve(dataURL);
+      } catch (e) {
+        resolve(url);
+      }
+    };
+    img.onerror = function() {
+      resolve(url);
+    };
+    setTimeout(function() { resolve(url); }, 8000);
+    img.src = url;
+  });
+}
+
+// --- Download Word document ---
+function downloadWordDoc(html, filename) {
+  var blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function() {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+}
