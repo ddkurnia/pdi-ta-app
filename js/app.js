@@ -2039,8 +2039,7 @@ async function generateWordHTML(reports, title) {
       '.cover .org { font-size: 11pt; color: #888; margin-top: 16px; }' +
       '.cover .title-doc { font-size: 14pt; color: #1a1a1a; margin-top: 24px; font-weight: 700; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; padding: 12px 0; }' +
       '.cover .timestamp { font-size: 9pt; color: #aaa; margin-top: 20px; }' +
-      '.report { page-break-before: always; margin-bottom: 20px; }' +
-      '.report:first-of-type { page-break-before: auto; }' +
+      '.report { margin-bottom: 20px; }' +
       '.report-header { background: #f8f8f8; padding: 14px 16px; border-left: 4px solid #c4161c; margin-bottom: 16px; }' +
       '.report-header h3 { font-size: 14pt; margin: 0 0 6px; color: #1a1a1a; }' +
       '.report-meta { font-size: 9pt; color: #888; margin: 0; }' +
@@ -2071,7 +2070,7 @@ async function generateWordHTML(reports, title) {
       '<div class="timestamp">' + reportsWithImages.length + ' laporan &middot; Dicetak: ' + timestamp + '</div>' +
     '</div>';
 
-  // Each report on a new page
+  // Each report on a new page - use explicit page break for Word compatibility
   for (var k = 0; k < reportsWithImages.length; k++) {
     var item = reportsWithImages[k];
     var r = item.data;
@@ -2080,6 +2079,11 @@ async function generateWordHTML(reports, title) {
     var reportType = r.type || 'Harian';
     var statusClass = r.status === 'approved' ? 'status-approved' : r.status === 'rejected' ? 'status-rejected' : r.status === 'revisi' ? 'status-revisi' : 'status-pending';
     var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+
+    // Insert explicit page break before each report (except the first one)
+    if (k > 0) {
+      html += '<br clear="all" style="page-break-before:always;mso-break-type:section-break">';
+    }
 
     html += '<div class="report">' +
       '<div class="report-header">' +
