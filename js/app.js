@@ -1965,9 +1965,17 @@ async function showPrintPreview(reports, title, filename) {
   var infoEl = document.getElementById('previewInfo');
   var bodyEl = document.getElementById('printPreviewBody');
   if (infoEl) infoEl.textContent = reports.length + ' laporan';
-  if (bodyEl) bodyEl.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
+  if (bodyEl) bodyEl.innerHTML = '<div class="spinner-center"><div class="spinner"></div><p style="margin-top:12px;font-size:12px;color:var(--text2)">Mengunduh foto dan menyiapkan preview...</p></div>';
 
   try {
+    // Count total photos for progress feedback
+    var totalPhotos = 0;
+    reports.forEach(function(item) {
+      var r = item.data || item;
+      var fotoList = (r.fotoUrl && Array.isArray(r.fotoUrl)) ? r.fotoUrl : [];
+      totalPhotos += fotoList.length;
+    });
+
     var html = await generateWordHTML(reports, title);
     pendingWordHTML = html;
     pendingWordFilename = filename;
@@ -1977,6 +1985,7 @@ async function showPrintPreview(reports, title, filename) {
     var previewContent = bodyMatch ? bodyMatch[1] : html;
 
     if (bodyEl) bodyEl.innerHTML = '<div style="background:#fff;padding:24px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a1a;line-height:1.6">' + previewContent + '</div>';
+    if (infoEl) infoEl.textContent = reports.length + ' laporan' + (totalPhotos > 0 ? ' &middot; ' + totalPhotos + ' foto ter-embed' : '');
     hideLoading();
   } catch (e) {
     hideLoading();
@@ -2120,32 +2129,52 @@ async function generateWordHTML(reports, title) {
 }
 
 // --- Convert image URL to base64 for Word embedding ---
+// Uses fetch() for reliable CORS download (more reliable than Image+Canvas)
 function urlToBase64(url) {
-  return new Promise(function(resolve, reject) {
-    if (url && url.indexOf('data:') === 0) { resolve(url); return; }
-    if (!url || url.indexOf('http') !== 0) { resolve(url); return; }
+  if (!url) return Promise.resolve('');
+  if (url.indexOf('data:') === 0) return Promise.resolve(url);
+  if (url.indexOf('http') !== 0) return Promise.resolve(url);
 
-    var img = new Image();
-    img.crossOrigin = 'Anonymous';
-    img.onload = function() {
-      try {
-        var canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth || img.width;
-        canvas.height = img.naturalHeight || img.height;
-        var ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        var dataURL = canvas.toDataURL('image/jpeg', 0.85);
-        resolve(dataURL);
-      } catch (e) {
-        resolve(url);
-      }
-    };
-    img.onerror = function() {
-      resolve(url);
-    };
-    setTimeout(function() { resolve(url); }, 8000);
-    img.src = url;
-  });
+  return fetch(url, { mode: 'cors', cache: 'force-cache' })
+    .then(function(response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.blob();
+    })
+    .then(function(blob) {
+      return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onloadend = function() { resolve(reader.result); };
+        reader.onerror = function() { reject(new Error('FileReader error')); };
+        reader.readAsDataURL(blob);
+      });
+    })
+    .catch(function(err) {
+      // Fallback: try Image + Canvas approach
+      console.warn('fetch base64 failed for', url, err.message, '- trying canvas fallback');
+      return new Promise(function(resolve) {
+        var img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = function() {
+          try {
+            var canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          } catch (e) {
+            console.error('Canvas fallback also failed for', url);
+            resolve(url);
+          }
+        };
+        img.onerror = function() {
+          console.error('Image fallback also failed for', url);
+          resolve(url);
+        };
+        setTimeout(function() { resolve(url); }, 15000);
+        img.src = url;
+      });
+    });
 }
 
 // --- Download Word document ---
