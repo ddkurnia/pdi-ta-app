@@ -482,6 +482,7 @@ textarea.form-input {
 .status-pending { background: var(--orange-bg); color: var(--orange); }
 .status-approved { background: var(--green-bg); color: var(--green); }
 .status-rejected { background: var(--red-light); color: var(--red); }
+.status-revisi { background: var(--blue-bg); color: var(--blue); }
 .status-active { background: var(--green-bg); color: var(--green); }
 .status-wait { background: var(--orange-bg); color: var(--orange); }
 
