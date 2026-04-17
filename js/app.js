@@ -833,13 +833,28 @@ async function loadProfil() {
   $sv('pWilayah', currentUser.wilayah || '');
   $sv('pNohp', currentUser.nohp || '');
   $sv('pAlamat', currentUser.alamat || '');
+
+  // Show profile photo in the avatar header at the top
+  var avatarEl = document.getElementById('profileAvatar');
+  if (avatarEl && currentUser.photo) {
+    avatarEl.innerHTML = '<img src="' + currentUser.photo + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+    avatarEl.style.background = 'none';
+  } else if (avatarEl) {
+    var nama = currentUser.nama || currentUser.email || 'T';
+    avatarEl.textContent = nama.charAt(0).toUpperCase();
+    avatarEl.style.background = '';
+    avatarEl.innerHTML = nama.charAt(0).toUpperCase();
+  }
+
+  // Show photo in the upload area too
   var g = document.getElementById('pPhotoGrid');
   if (g && currentUser.photo) {
     g.innerHTML = '<div class="photo-thumb"><img src="' + currentUser.photo + '"></div>';
+    uploadedPhotos = [currentUser.photo];
   } else if (g) {
     g.innerHTML = '';
+    uploadedPhotos = [];
   }
-  uploadedPhotos = [];
 }
 
 async function saveProfil() {
@@ -856,7 +871,16 @@ async function saveProfil() {
     currentUser.jabatan = jabatan;
     currentUser.photo = photo;
     document.getElementById('profileName').textContent = nama;
-    document.getElementById('profileAvatar').textContent = nama.charAt(0).toUpperCase();
+    // Update avatar: show photo if available, otherwise show initial
+    var avatarEl = document.getElementById('profileAvatar');
+    if (photo) {
+      avatarEl.innerHTML = '<img src="' + photo + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+      avatarEl.style.background = 'none';
+    } else {
+      avatarEl.textContent = nama.charAt(0).toUpperCase();
+      avatarEl.style.background = '';
+      avatarEl.innerHTML = nama.charAt(0).toUpperCase();
+    }
     var welcomeEl = document.getElementById('welcomeName');
     if (welcomeEl) welcomeEl.textContent = 'Halo, ' + nama + '!';
     hideLoading();
