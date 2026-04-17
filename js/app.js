@@ -24,6 +24,8 @@ const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/uplo
 let currentUser = null;
 let uploadedPhotos = [];
 let notifUnsubscribe = null;
+let lastNotifCount = 0;
+let lastNotifIds = new Set();
 
 // Real-time cached data
 let taReportUnsub = null;
@@ -597,18 +599,114 @@ function rmPhoto(btn, url) {
 }
 
 // ============================================================
-// NOTIFICATIONS
+// NOTIFICATIONS (v7: In-app + System Notification + PWA Push)
 // ============================================================
+
+// --- Request browser notification permission ---
+async function requestNotifPermission() {
+  if (!('Notification' in window)) {
+    console.log('[Notif] Browser tidak mendukung Notification API');
+    return false;
+  }
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') {
+    console.log('[Notif] Permission notifikasi ditolak oleh user');
+    return false;
+  }
+  var result = await Notification.requestPermission();
+  console.log('[Notif] Permission result:', result);
+  return result === 'granted';
+}
+
+// --- Show system/browser notification ---
+function showSystemNotification(title, body, icon) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    var notifOptions = {
+      body: body,
+      icon: icon || 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Logo_PDI_Perjuangan.svg/120px-Logo_PDI_Perjuangan.svg.png',
+      badge: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Logo_PDI_Perjuangan.svg/120px-Logo_PDI_Perjuangan.svg.png',
+      tag: 'pdi-ta-' + Date.now(),
+      requireInteraction: true,
+      vibrate: [200, 100, 200]
+    };
+    var n = new Notification(title, notifOptions);
+    n.onclick = function() {
+      window.focus();
+      n.close();
+      // Open notif modal if available
+      if (typeof openNotifModal === 'function') openNotifModal();
+      else if (typeof loadNotifPage === 'function') loadNotifPage();
+    };
+    // Auto-close after 8 seconds
+    setTimeout(function() { n.close(); }, 8000);
+    console.log('[Notif] System notification shown:', title);
+  } catch (e) {
+    console.error('[Notif] Failed to show system notification:', e);
+  }
+}
+
+// --- Play notification sound ---
+function playNotifSound() {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 800;
+    osc.type = 'sine';
+    gain.gain.value = 0.3;
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.stop(ctx.currentTime + 0.5);
+    setTimeout(function() {
+      var osc2 = ctx.createOscillator();
+      var gain2 = ctx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.frequency.value = 1000;
+      osc2.type = 'sine';
+      gain2.gain.value = 0.3;
+      osc2.start();
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      osc2.stop(ctx.currentTime + 0.5);
+    }, 200);
+  } catch (e) {}
+}
+
+// --- Init realtime notifications (in-app bell + system notification) ---
 function initNotifs(myUid, isAdmin) {
   if (notifUnsubscribe) { notifUnsubscribe(); notifUnsubscribe = null; }
+  lastNotifIds = new Set();
+  lastNotifCount = 0;
   var targets = isAdmin ? [myUid, 'admin', 'all'] : [myUid, 'all'];
+
+  // Request notification permission for system notifications
+  requestNotifPermission();
+
+  // Firestore realtime listener
   notifUnsubscribe = db.collection('notifikasi')
     .where('target', 'in', targets)
-    .orderBy('createdAt', 'desc')
     .limit(50)
     .onSnapshot(function(snap) {
       var count = 0;
-      snap.forEach(function(d) { if (!d.data().isRead) count++; });
+      var latestUnread = null;
+      var currentIds = new Set();
+
+      snap.forEach(function(d) {
+        currentIds.add(d.id);
+        var data = d.data();
+        if (!data.isRead) {
+          count++;
+          // Track new unread notif (one that wasn't in previous set)
+          if (!lastNotifIds.has(d.id)) {
+            latestUnread = data;
+          }
+        }
+      });
+
+      // Update bell badge
       var dot = document.getElementById('bellDot');
       var cnt = document.getElementById('bellCount');
       if (dot) dot.classList.toggle('show', count > 0);
@@ -616,7 +714,36 @@ function initNotifs(myUid, isAdmin) {
       document.querySelectorAll('.nav-badge').forEach(function(b) {
         b.textContent = count; b.classList.toggle('show', count > 0);
       });
-    }, function(err) { console.warn('Notif listener error:', err); });
+
+      // If new unread notification arrived, show system notification + sound
+      if (latestUnread && count > lastNotifCount) {
+        playNotifSound();
+        // Show system notification especially when tab is not visible
+        if (document.hidden) {
+          showSystemNotification(
+            latestUnread.judul || 'Notifikasi Baru',
+            latestUnread.pesan || ''
+          );
+        }
+        // Also update page title with count
+        document.title = '(' + count + ') PDI TA App';
+      } else if (count === 0) {
+        document.title = 'PDI TA App';
+      }
+
+      lastNotifIds = currentIds;
+      lastNotifCount = count;
+      console.log('[Notif] Real-time active. Unread:', count, 'Total:', snap.size);
+    }, function(err) {
+      console.error('[Notif] Listener error:', err.code, err.message);
+      if (err.code === 'failed-precondition') {
+        showToast('Index Firestore notifikasi belum dibuat. Buka console untuk link.', 'error');
+        console.error('[Notif] COMPOSITE INDEX NEEDED. Open this URL:', err.message);
+      } else {
+        showToast('Gagal memuat notifikasi: ' + err.message, 'error');
+      }
+    });
+  console.log('[Notif] Listening for targets:', targets);
 }
 
 async function markRead(notifId) {
@@ -637,21 +764,27 @@ async function markAllRead(myUid) {
     if (snap.size > 0) await batch.commit();
     showToast('Semua notifikasi dibaca', 'success');
     loadNotifPage();
-  } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
+  } catch (e) {
+    console.error('[Notif] markAllRead error:', e);
+    showToast('Gagal: ' + e.message, 'error');
+  }
 }
 
 function openNotifModal() { loadNotifPage(); openModal('notifModal'); }
 
-function renderNotifs(snap) {
+function renderNotifs(snapOrData) {
   var el = document.getElementById('notifModalBody');
   if (!el) return;
-  if (snap.empty) {
+
+  // Support both original QuerySnapshot and sorted docs array
+  var isEmpty = snapOrData.empty !== undefined ? snapOrData.empty : (snapOrData.empty === true);
+  if (isEmpty || !snapOrData.docs || snapOrData.docs.length === 0) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDD14</div><h4>Belum Ada Notifikasi</h4><p>Notifikasi terbaru muncul di sini</p></div>';
     return;
   }
   var h = '';
-  snap.forEach(function(d) {
-    var n = d.data();
+  snapOrData.docs.forEach(function(d) {
+    var n = typeof d.data === 'function' ? d.data() : d.data;
     var ur = !n.isRead;
     var judul = (n.judul || '').toLowerCase();
     var icon = '\uD83D\uDCE2', bg = 'var(--purple-bg)';
@@ -681,11 +814,21 @@ async function loadNotifPage() {
     var targets = isAdmin ? [currentUser.uid, 'admin', 'all'] : [currentUser.uid, 'all'];
     var snap = await db.collection('notifikasi')
       .where('target', 'in', targets)
-      .orderBy('createdAt', 'desc')
       .limit(50)
       .get();
-    renderNotifs(snap);
+
+    // Sort client-side by createdAt desc
+    var docs = [];
+    snap.forEach(function(d) { docs.push(d); });
+    docs.sort(function(a, b) {
+      var ta = a.data().createdAt ? (a.data().createdAt.toDate ? a.data().createdAt.toDate() : new Date(a.data().createdAt)) : new Date(0);
+      var tb = b.data().createdAt ? (b.data().createdAt.toDate ? b.data().createdAt.toDate() : new Date(b.data().createdAt)) : new Date(0);
+      return tb - ta;
+    });
+
+    renderNotifs({ docs: docs, empty: docs.length === 0 });
   } catch (e) {
+    console.error('[Notif] loadNotifPage error:', e);
     var el = document.getElementById('notifModalBody');
     if (el) el.innerHTML = '<div class="empty-state"><h4>Gagal memuat</h4></div>';
   }
@@ -2191,4 +2334,107 @@ function downloadWordDoc(html, filename) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 100);
+}
+
+// ============================================================
+// PWA + SERVICE WORKER + FCM (v7)
+// ============================================================
+
+// --- Register Service Worker ---
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .then(function(reg) {
+        console.log('[SW] Registered successfully. Scope:', reg.scope);
+        // Check for updates periodically
+        setInterval(function() { reg.update(); }, 60 * 60 * 1000);
+      })
+      .catch(function(err) {
+        console.warn('[SW] Registration failed:', err);
+      });
+  } else {
+    console.log('[SW] Service Worker not supported');
+  }
+}
+
+// --- Initialize FCM and get push token ---
+async function initFCM() {
+  // FCM requires firebase-messaging SDK to be loaded
+  if (typeof firebase.messaging === 'undefined') {
+    console.log('[FCM] firebase-messaging SDK not loaded. Push notifications will use service worker fallback.');
+    registerServiceWorker();
+    return;
+  }
+
+  try {
+    const messaging = firebase.messaging();
+
+    // Request permission first
+    const permission = await requestNotifPermission();
+    if (!permission) {
+      console.log('[FCM] Notification permission not granted');
+      registerServiceWorker();
+      return;
+    }
+
+    // Get FCM token
+    const token = await messaging.getToken({
+      vapidKey: 'BLhJ_example_REPLACE_WITH_YOUR_VAPID_KEY'
+    });
+
+    console.log('[FCM] Token obtained:', token.substring(0, 20) + '...');
+
+    // Save token to Firestore user doc
+    if (currentUser && currentUser.uid) {
+      await db.collection('users').doc(currentUser.uid).update({
+        fcmToken: token,
+        fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(function(e) {
+        console.warn('[FCM] Failed to save token:', e);
+      });
+    }
+
+    // Listen for token refresh
+    messaging.onTokenRefresh(async function() {
+      try {
+        const newToken = await messaging.getToken();
+        console.log('[FCM] Token refreshed');
+        if (currentUser && currentUser.uid) {
+          await db.collection('users').doc(currentUser.uid).update({
+            fcmToken: newToken,
+            fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }).catch(function(){});
+        }
+      } catch (e) {
+        console.error('[FCM] Token refresh error:', e);
+      }
+    });
+
+    // Handle foreground messages (when app is open)
+    messaging.onMessage(function(payload) {
+      console.log('[FCM] Foreground message:', payload);
+      var data = payload.data || {};
+      var title = data.title || 'Notifikasi Baru';
+      var body = data.body || '';
+      playNotifSound();
+      showSystemNotification(title, body);
+    });
+
+    console.log('[FCM] Initialized successfully');
+  } catch (e) {
+    console.error('[FCM] Init error:', e);
+    if (e.code === 'messaging/permission-blocked') {
+      console.warn('[FCM] Notification permission was blocked');
+    }
+  }
+
+  // Always register service worker regardless of FCM
+  registerServiceWorker();
+}
+
+// --- Auto-register service worker on load (for basic PWA support) ---
+// Call registerServiceWorker() immediately for basic offline + PWA install
+// Call initFCM() after login for full push notification support
+if ('serviceWorker' in navigator) {
+  registerServiceWorker();
 }
