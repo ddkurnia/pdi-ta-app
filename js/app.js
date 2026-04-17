@@ -356,8 +356,12 @@ async function doRegister() {
   showLoading();
   try {
     // Step 1: Buat akun auth
+    console.log('[Register] Step 1: Membuat akun auth untuk', email);
     const r = await auth.createUserWithEmailAndPassword(email, pw);
+    console.log('[Register] Step 1 OK. UID:', r.user.uid);
+
     // Step 2: Simpan ke collection "users" sesuai schema
+    console.log('[Register] Step 2: Menulis ke Firestore collection users...');
     await db.collection('users').doc(r.user.uid).set({
       email: email,
       nama: nama,
@@ -365,6 +369,8 @@ async function doRegister() {
       status: 'pending',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    console.log('[Register] Step 2 OK. Data user tersimpan.');
+
     // Step 3: Logout otomatis
     await auth.signOut();
     hideLoading();
@@ -372,22 +378,31 @@ async function doRegister() {
     switchAuthTab('login');
   } catch (e) {
     hideLoading();
-    console.error('Register error:', e.code, e.message);
+    console.error('[Register] ERROR:', e.code, '|', e.message);
+    console.error('[Register] Full error:', JSON.stringify(e));
+
     // Jika Firestore gagal, hapus akun auth yang sudah terbuat
     if (auth.currentUser && e.code && !e.code.startsWith('auth/')) {
-      try { await auth.currentUser.delete(); } catch (delErr) { console.warn('Cleanup:', delErr); }
+      console.log('[Register] Firestore gagal, menghapus akun auth...');
+      try { await auth.currentUser.delete(); } catch (delErr) { console.warn('[Register] Cleanup:', delErr); }
     }
-    const m = {
-      'auth/email-already-in-use': 'Email sudah terdaftar. Gunakan email lain.',
-      'auth/invalid-email': 'Format email tidak valid',
-      'auth/weak-password': 'Password terlalu lemah (min 6 karakter)',
-      'auth/operation-not-allowed': 'Email/Password auth belum diaktifkan di Firebase Console',
-      'auth/network-request-failed': 'Koneksi internet bermasalah',
-      'permission-denied': 'Akses Firestore ditolak! Cek Security Rules di Firebase Console.',
-      'auth/too-many-requests': 'Terlalu banyak percobaan. Coba lagi nanti.'
-    };
-    const msg = m[e.code] || ('Gagal daftar: ' + (e.message || 'Unknown error'));
-    showToast(msg, 'error');
+
+    // Deteksi error dan berikan pesan yang jelas
+    const errMsg = e.message || '';
+    if (errMsg.includes('PERMISSION_DENIED') || errMsg.includes('Missing or insufficient permissions') || e.code === 'permission-denied') {
+      showToast('GAGAL: Firestore Security Rules memblokir! Buka Firebase Console > Firestore > Rules, lalu ubah ke: allow read, write: if request.auth != null;', 'error');
+    } else {
+      const m = {
+        'auth/email-already-in-use': 'Email sudah terdaftar. Gunakan email lain.',
+        'auth/invalid-email': 'Format email tidak valid',
+        'auth/weak-password': 'Password terlalu lemah (min 6 karakter)',
+        'auth/operation-not-allowed': 'Email/Password auth belum diaktifkan di Firebase Console',
+        'auth/network-request-failed': 'Koneksi internet bermasalah',
+        'auth/too-many-requests': 'Terlalu banyak percobaan. Tunggu beberapa menit lalu coba lagi.'
+      };
+      const msg = m[e.code] || ('Gagal daftar: ' + (errMsg || 'Unknown error'));
+      showToast(msg, 'error');
+    }
   }
 }
 
