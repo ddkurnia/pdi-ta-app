@@ -825,6 +825,37 @@ function renderReportCard(r, id) {
 }
 
 // --- Profil ---
+async function processAvatarUpload(input) {
+  var file = input.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) return showToast('File harus berupa gambar', 'error');
+  if (file.size > 5 * 1024 * 1024) return showToast('Ukuran maksimal 5MB', 'error');
+  showLoading();
+  try {
+    var url = await uploadToCloudinary(file);
+    uploadedPhotos = [url];
+    // Preview photo directly in avatar
+    var avatarEl = document.getElementById('profileAvatar');
+    if (avatarEl) {
+      // Keep the edit icon, just update the image
+      var editIcon = document.getElementById('avatarEditIcon');
+      avatarEl.innerHTML = '';
+      avatarEl.appendChild(editIcon);
+      var img = document.createElement('img');
+      img.src = url;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;position:relative;z-index:1';
+      avatarEl.insertBefore(img, editIcon);
+      avatarEl.style.background = 'none';
+    }
+    hideLoading();
+    showToast('Foto berhasil diupload', 'success');
+  } catch (e) {
+    hideLoading();
+    showToast('Gagal upload foto', 'error');
+  }
+  input.value = '';
+}
+
 async function loadProfil() {
   if (!currentUser) return;
   $sv('pNama', currentUser.nama || '');
@@ -837,22 +868,25 @@ async function loadProfil() {
   // Show profile photo in the avatar header at the top
   var avatarEl = document.getElementById('profileAvatar');
   if (avatarEl && currentUser.photo) {
-    avatarEl.innerHTML = '<img src="' + currentUser.photo + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+    var editIcon = document.getElementById('avatarEditIcon');
+    avatarEl.innerHTML = '';
+    avatarEl.appendChild(editIcon);
+    var img = document.createElement('img');
+    img.src = currentUser.photo;
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;position:relative;z-index:1';
+    avatarEl.insertBefore(img, editIcon);
     avatarEl.style.background = 'none';
+    uploadedPhotos = [currentUser.photo];
   } else if (avatarEl) {
     var nama = currentUser.nama || currentUser.email || 'T';
-    avatarEl.textContent = nama.charAt(0).toUpperCase();
+    var editIcon = document.getElementById('avatarEditIcon');
+    avatarEl.innerHTML = '';
+    avatarEl.appendChild(editIcon);
+    var span = document.createElement('span');
+    span.textContent = nama.charAt(0).toUpperCase();
+    span.style.cssText = 'position:relative;z-index:1';
+    avatarEl.insertBefore(span, editIcon);
     avatarEl.style.background = '';
-    avatarEl.innerHTML = nama.charAt(0).toUpperCase();
-  }
-
-  // Show photo in the upload area too
-  var g = document.getElementById('pPhotoGrid');
-  if (g && currentUser.photo) {
-    g.innerHTML = '<div class="photo-thumb"><img src="' + currentUser.photo + '"></div>';
-    uploadedPhotos = [currentUser.photo];
-  } else if (g) {
-    g.innerHTML = '';
     uploadedPhotos = [];
   }
 }
@@ -873,13 +907,23 @@ async function saveProfil() {
     document.getElementById('profileName').textContent = nama;
     // Update avatar: show photo if available, otherwise show initial
     var avatarEl = document.getElementById('profileAvatar');
+    var editIcon = document.getElementById('avatarEditIcon');
     if (photo) {
-      avatarEl.innerHTML = '<img src="' + photo + '" style="width:100%;height:100%;object-fit:cover;border-radius:50%">';
+      avatarEl.innerHTML = '';
+      avatarEl.appendChild(editIcon);
+      var img = document.createElement('img');
+      img.src = photo;
+      img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;position:relative;z-index:1';
+      avatarEl.insertBefore(img, editIcon);
       avatarEl.style.background = 'none';
     } else {
-      avatarEl.textContent = nama.charAt(0).toUpperCase();
+      avatarEl.innerHTML = '';
+      avatarEl.appendChild(editIcon);
+      var span = document.createElement('span');
+      span.textContent = nama.charAt(0).toUpperCase();
+      span.style.cssText = 'position:relative;z-index:1';
+      avatarEl.insertBefore(span, editIcon);
       avatarEl.style.background = '';
-      avatarEl.innerHTML = nama.charAt(0).toUpperCase();
     }
     var welcomeEl = document.getElementById('welcomeName');
     if (welcomeEl) welcomeEl.textContent = 'Halo, ' + nama + '!';
