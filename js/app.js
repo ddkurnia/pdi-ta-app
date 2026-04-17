@@ -369,7 +369,7 @@ function switchPage(name) {
   if (name === 'riwayat') renderRiwayat();
   if (name === 'profil') loadProfil();
   if (name === 'a_home') { renderAdminDashStats(); renderAdminDashUsers(); }
-  if (name === 'a_laporan') renderAdminReportList();
+  if (name === 'a_laporan') { setDateToday(); setMonthThis(); renderDailyReports(); }
   if (name === 'a_user') renderAdminUserList();
 }
 
@@ -1745,62 +1745,201 @@ function printPage() { window.print(); }
 // WORD EXPORT MODULE (v6)
 // ============================================================
 
-function toggleReportSelect(id, checked) {
-  if (checked) {
-    selectedReportIds.add(id);
-  } else {
-    selectedReportIds.delete(id);
-  }
-  renderAdminReportList();
+// ============================================================
+// ADMIN LAPORAN: SUB-TAB HARIAN & BULANAN
+// ============================================================
+var currentSubTab = 'harian';
+var pendingWordHTML = null;
+var pendingWordFilename = null;
+
+function switchSubTab(tab) {
+  currentSubTab = tab;
+  document.querySelectorAll('.sub-tab').forEach(function(b) { b.classList.toggle('active', b.dataset.subtab === tab); });
+  document.getElementById('subtab_harian').style.display = tab === 'harian' ? 'block' : 'none';
+  document.getElementById('subtab_bulanan').style.display = tab === 'bulanan' ? 'block' : 'none';
+  if (tab === 'harian') { setDateToday(); renderDailyReports(); }
+  else { setMonthThis(); renderMonthlyReports(); }
 }
 
-function toggleSelectAllReports(checked) {
-  var periodEl = document.getElementById('aPeriod');
-  var period = periodEl ? periodEl.value : 'all';
-  var filtered = filterByPeriod(cachedAdminReports, period);
-
-  if (checked) {
-    filtered.forEach(function(item) { selectedReportIds.add(item.id); });
-  } else {
-    selectedReportIds.clear();
-  }
-  renderAdminReportList();
+function setDateToday() {
+  var el = document.getElementById('dailyDate');
+  if (el) el.value = new Date().toISOString().split('T')[0];
 }
 
-function openPrintOptions() {
-  var count = selectedReportIds.size;
-  if (count === 0) {
-    showToast('Pilih laporan terlebih dahulu', 'warning');
-    return;
-  }
+function setMonthThis() {
+  var el = document.getElementById('monthlyMonth');
+  if (el) { var n = new Date(); el.value = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); }
+}
 
-  var existingModal = document.getElementById('printOptionsModal');
-  if (existingModal) existingModal.remove();
+// --- Filter reports by specific date string (YYYY-MM-DD) ---
+function filterReportsByDate(dateStr) {
+  if (!dateStr) return [];
+  return cachedAdminReports.filter(function(item) {
+    var tanggal = item.data.tanggal;
+    if (!tanggal) return false;
+    if (typeof tanggal === 'string') return tanggal === dateStr;
+    if (tanggal.toDate) {
+      var d = tanggal.toDate();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') === dateStr;
+    }
+    return false;
+  });
+}
 
-  var modal = document.createElement('div');
-  modal.id = 'printOptionsModal';
-  modal.className = 'modal-overlay show';
-  modal.onclick = function(e) { if (e.target === modal) closeModal('printOptionsModal'); };
-  modal.innerHTML =
-    '<div class="modal-sheet" style="max-width:400px">' +
-      '<div class="modal-handle"></div>' +
-      '<div class="modal-top">' +
-        '<h3>\uD83D\uDDA8 Cetak Laporan</h3>' +
-        '<button class="modal-close" onclick="closeModal(\'printOptionsModal\')">&times;</button>' +
-      '</div>' +
-      '<div class="modal-content">' +
-        '<p style="margin-bottom:16px;color:var(--text2);font-size:13px">' + count + ' laporan dipilih</p>' +
-        '<div style="display:flex;flex-direction:column;gap:10px">' +
-          '<button class="btn btn-red btn-block" onclick="printSelectedReports()">\uD83D\uDDA8 Cetak ' + count + ' Laporan Terpilih ke Word</button>' +
-          '<button class="btn btn-outline btn-block" onclick="printAllReports()">\uD83D\uDCCB Cetak Semua Laporan (Filtered) ke Word</button>' +
-          '<button class="btn btn-outline btn-block" onclick="printByPeriod(\'Harian\', \'daily\')">\uD83D\uDCC5 Cetak Laporan Hari Ini</button>' +
-          '<button class="btn btn-outline btn-block" onclick="printByPeriod(\'Bulanan\', \'monthly\')">\uD83D\uDCC6 Cetak Laporan Bulan Ini</button>' +
+// --- Filter reports by month (YYYY-MM) ---
+function filterReportsByMonth(monthStr) {
+  if (!monthStr) return [];
+  return cachedAdminReports.filter(function(item) {
+    var tanggal = item.data.tanggal;
+    if (!tanggal) return false;
+    var dStr = '';
+    if (typeof tanggal === 'string') dStr = tanggal.substring(0, 7);
+    else if (tanggal.toDate) { var d = tanggal.toDate(); dStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+    return dStr === monthStr;
+  });
+}
+
+// --- Render Daily Reports (grouped by user) ---
+function renderDailyReports() {
+  var dateStr = document.getElementById('dailyDate').value;
+  var container = document.getElementById('dailyRepList');
+  var titleEl = document.getElementById('dailyTitle');
+  if (!container) return;
+
+  if (!dateStr) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><h4>Pilih tanggal</h4></div>'; return; }
+
+  var filtered = filterReportsByDate(dateStr);
+  var dateLabel = new Date(dateStr + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  if (titleEl) titleEl.textContent = 'Laporan Harian';
+
+  if (!filtered.length) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan</h4><p>' + esc(dateLabel) + '</p></div>'; return; }
+
+  container.innerHTML = '<div style="padding:10px 16px;background:var(--red-light);border-bottom:1px solid var(--border);font-size:12px;color:var(--red-dark);font-weight:600">' + filtered.length + ' laporan &middot; ' + esc(dateLabel) + '</div>' + buildGroupedReportHTML(filtered);
+}
+
+// --- Render Monthly Reports (grouped by user, then by date) ---
+function renderMonthlyReports() {
+  var monthStr = document.getElementById('monthlyMonth').value;
+  var container = document.getElementById('monthlyRepList');
+  var titleEl = document.getElementById('monthlyTitle');
+  if (!container) return;
+
+  if (!monthStr) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📆</div><h4>Pilih bulan</h4></div>'; return; }
+
+  var filtered = filterReportsByMonth(monthStr);
+  var [y, m] = monthStr.split('-');
+  var monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  var monthLabel = monthNames[parseInt(m) - 1] + ' ' + y;
+  if (titleEl) titleEl.textContent = 'Laporan Bulanan';
+
+  if (!filtered.length) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan</h4><p>' + esc(monthLabel) + '</p></div>'; return; }
+
+  container.innerHTML = '<div style="padding:10px 16px;background:var(--red-light);border-bottom:1px solid var(--border);font-size:12px;color:var(--red-dark);font-weight:600">' + filtered.length + ' laporan &middot; ' + esc(monthLabel) + '</div>' + buildGroupedReportHTML(filtered);
+}
+
+// --- Build grouped report HTML (by user) for daily/monthly ---
+function buildGroupedReportHTML(filtered) {
+  var isAdmin = currentUser && currentUser.role === 'admin';
+  var userInfo = {};
+  cachedAdminUsers.forEach(function(u) { userInfo[u.id] = u.data; });
+
+  // Group by userId
+  var grouped = {};
+  filtered.forEach(function(item) {
+    var uid = item.data.userId || 'unknown';
+    if (!grouped[uid]) grouped[uid] = [];
+    grouped[uid].push(item);
+  });
+
+  var userIds = Object.keys(grouped).sort(function(a, b) { return grouped[b].length - grouped[a].length; });
+  var h = '';
+
+  userIds.forEach(function(uid) {
+    var reports = grouped[uid];
+    var u = userInfo[uid] || {};
+    var nama = u.nama || reports[0].data.nama || 'Unknown';
+    var jabatan = u.jabatan || '-';
+    var userPhoto = u.photo || '';
+
+    var avatarHtml = '';
+    if (userPhoto) {
+      avatarHtml = '<div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-right:10px"><img src="' + userPhoto + '" style="width:100%;height:100%;object-fit:cover"></div>';
+    } else {
+      avatarHtml = '<div style="width:36px;height:36px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0;margin-right:10px">' + nama.charAt(0).toUpperCase() + '</div>';
+    }
+
+    var groupId = 'ug_' + uid.replace(/[^a-zA-Z0-9]/g, '');
+    h += '<div style="margin-bottom:2px">' +
+      '<div class="report-item" style="background:var(--bg);cursor:pointer;border-bottom:1px solid var(--border);border-top:2px solid var(--red)" onclick="toggleUserGroup(\'' + groupId + '\')">' +
+        avatarHtml +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:14px;font-weight:700">' + esc(nama) + '</div>' +
+          '<div style="font-size:11px;color:var(--text2)">' + esc(jabatan) + '</div>' +
         '</div>' +
+        '<div style="text-align:center;flex-shrink:0;margin-right:8px">' +
+          '<div style="font-size:18px;font-weight:800;color:var(--red)">' + reports.length + '</div>' +
+          '<div style="font-size:9px;color:var(--text3);font-weight:600">LAPORAN</div>' +
+        '</div>' +
+        '<div style="color:var(--text3);font-size:12px" id="chevron_' + groupId + '">&#9660;</div>' +
       '</div>' +
-    '</div>';
-  document.body.appendChild(modal);
+      '<div id="' + groupId + '" style="border-bottom:1px solid var(--border)">';
+
+    reports.forEach(function(item) {
+      var r = item.data;
+      var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+      var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+      var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
+
+      var quickBtns = '';
+      if ((r.status === 'pending' || r.status === 'revisi') && isAdmin) {
+        quickBtns = ' <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="event.stopPropagation();quickRevise(\'' + item.id + '\')">\u21BB</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
+      }
+
+      h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')" style="display:flex;align-items:center;padding-left:56px">' +
+        '<div class="ri-icon" style="background:' + iconBg + ';width:36px;height:36px;font-size:15px">\uD83D\uDCC4</div>' +
+        '<div class="ri-body" style="flex:1;min-width:0">' +
+          '<div class="ri-title">' + esc(r.judul) + '</div>' +
+          '<div class="ri-sub">' + formatDate(r.tanggal) + ' &middot; ' + esc(r.type || 'Harian') + '</div>' +
+          '<div class="ri-meta"><span class="status status-' + statusClass + '">' + statusText + '</span>' + quickBtns + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+
+    h += '</div></div>';
+  });
+  return h;
 }
 
+// ============================================================
+// PRINT / CETAK: Preview + Word Export
+// ============================================================
+
+// --- Print Daily Reports ---
+async function printDailyReports() {
+  var dateStr = document.getElementById('dailyDate').value;
+  if (!dateStr) return showToast('Pilih tanggal terlebih dahulu', 'warning');
+  var filtered = filterReportsByDate(dateStr);
+  if (!filtered.length) return showToast('Tidak ada laporan untuk tanggal ini', 'warning');
+  var dateLabel = new Date(dateStr + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  var title = 'Laporan Harian - ' + dateLabel;
+  var filename = 'Laporan_Harian_' + dateStr.replace(/-/g, '') + '.doc';
+  await showPrintPreview(filtered, title, filename);
+}
+
+// --- Print Monthly Reports ---
+async function printMonthlyReports() {
+  var monthStr = document.getElementById('monthlyMonth').value;
+  if (!monthStr) return showToast('Pilih bulan terlebih dahulu', 'warning');
+  var filtered = filterReportsByMonth(monthStr);
+  if (!filtered.length) return showToast('Tidak ada laporan untuk bulan ini', 'warning');
+  var [y, m] = monthStr.split('-');
+  var monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  var title = 'Laporan Bulanan - ' + monthNames[parseInt(m) - 1] + ' ' + y;
+  var filename = 'Laporan_Bulanan_' + monthStr.replace(/-/g, '') + '.doc';
+  await showPrintPreview(filtered, title, filename);
+}
+
+// --- Print Single Report (from detail modal) ---
 async function printSingleReport(id) {
   showLoading();
   try {
@@ -1809,116 +1948,55 @@ async function printSingleReport(id) {
     var r = normalizeReport(doc.data());
     var reportData = [{ id: doc.id, data: r }];
     var title = 'Laporan - ' + (r.judul || 'Tanpa Judul');
-    var html = await generateWordHTML(reportData, title);
-    var filename = 'Laporan_' + (r.judul || 'report').replace(/[^a-zA-Z0-9\u00C0-\u024F]/g, '_') + '.doc';
-    downloadWordDoc(html, filename);
+    var filename = 'Laporan_' + (r.judul || 'report').replace(/[^a-zA-Z0-9\u00C0-\u024F]/g, '_').substring(0, 30) + '.doc';
+    await showPrintPreview(reportData, title, filename);
     hideLoading();
-    showToast('Dokumen Word berhasil diunduh', 'success');
   } catch (e) {
     hideLoading();
-    console.error('printSingleReport error:', e);
-    showToast('Gagal mencetak: ' + e.message, 'error');
+    showToast('Gagal: ' + e.message, 'error');
   }
 }
 
-async function printSelectedReports() {
-  if (selectedReportIds.size === 0) {
-    showToast('Pilih laporan terlebih dahulu', 'warning');
-    return;
-  }
-  closeModal('printOptionsModal');
+// --- Show Preview Modal ---
+async function showPrintPreview(reports, title, filename) {
   showLoading();
+  openModal('printPreviewModal');
+
+  var infoEl = document.getElementById('previewInfo');
+  var bodyEl = document.getElementById('printPreviewBody');
+  if (infoEl) infoEl.textContent = reports.length + ' laporan';
+  if (bodyEl) bodyEl.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
 
   try {
-    var reports = [];
-    var idsToFetch = [];
-    selectedReportIds.forEach(function(id) {
-      var cached = cachedAdminReports.find(function(r) { return r.id === id; });
-      if (cached) {
-        reports.push(cached);
-      } else {
-        idsToFetch.push(id);
-      }
-    });
+    var html = await generateWordHTML(reports, title);
+    pendingWordHTML = html;
+    pendingWordFilename = filename;
 
-    if (idsToFetch.length > 0) {
-      for (var i = 0; i < idsToFetch.length; i++) {
-        var doc = await db.collection('laporan').doc(idsToFetch[i]).get();
-        if (doc.exists) {
-          reports.push({ id: doc.id, data: normalizeReport(doc.data()) });
-        }
-      }
-    }
+    // Extract body content for preview (strip Word XML wrapper)
+    var bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    var previewContent = bodyMatch ? bodyMatch[1] : html;
 
-    reports.sort(function(a, b) {
-      var ta = a.data.createdAt ? (a.data.createdAt.toDate ? a.data.createdAt.toDate() : new Date(a.data.createdAt)) : new Date(0);
-      var tb = b.data.createdAt ? (b.data.createdAt.toDate ? b.data.createdAt.toDate() : new Date(b.data.createdAt)) : new Date(0);
-      return tb - ta;
-    });
-
-    var html = await generateWordHTML(reports, 'Laporan Terpilih (' + reports.length + ')');
-    var filename = 'Laporan_Terpilih_' + reports.length + '.doc';
-    downloadWordDoc(html, filename);
+    if (bodyEl) bodyEl.innerHTML = '<div style="background:#fff;padding:24px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a1a;line-height:1.6">' + previewContent + '</div>';
     hideLoading();
-    showToast(reports.length + ' laporan berhasil dicetak ke Word', 'success');
   } catch (e) {
     hideLoading();
-    console.error('printSelectedReports error:', e);
-    showToast('Gagal mencetak: ' + e.message, 'error');
+    if (bodyEl) bodyEl.innerHTML = '<p style="text-align:center;color:var(--red)">Gagal memuat preview: ' + esc(e.message) + '</p>';
   }
 }
 
-async function printAllReports() {
-  closeModal('printOptionsModal');
-  var periodEl = document.getElementById('aPeriod');
-  var period = periodEl ? periodEl.value : 'all';
-  var filtered = filterByPeriod(cachedAdminReports, period);
-
-  if (filtered.length === 0) {
-    showToast('Tidak ada laporan untuk dicetak', 'warning');
-    return;
-  }
-
-  showLoading();
-  try {
-    var periodLabel = period === 'all' ? 'Semua Periode' : period === 'daily' ? 'Hari Ini' : period === 'monthly' ? 'Bulan Ini' : period === 'yearly' ? 'Tahun Ini' : period;
-    var html = await generateWordHTML(filtered, 'Semua Laporan - ' + periodLabel + ' (' + filtered.length + ')');
-    var filename = 'Laporan_' + periodLabel.replace(/\s/g, '_') + '.doc';
-    downloadWordDoc(html, filename);
-    hideLoading();
-    showToast(filtered.length + ' laporan berhasil dicetak ke Word', 'success');
-  } catch (e) {
-    hideLoading();
-    console.error('printAllReports error:', e);
-    showToast('Gagal mencetak: ' + e.message, 'error');
-  }
-}
-
-async function printByPeriod(periodLabel, period) {
-  closeModal('printOptionsModal');
-  var filtered = filterByPeriod(cachedAdminReports, period);
-
-  if (filtered.length === 0) {
-    showToast('Tidak ada laporan untuk periode ini', 'warning');
-    return;
-  }
-
-  showLoading();
-  try {
-    var html = await generateWordHTML(filtered, 'Laporan ' + periodLabel + ' (' + filtered.length + ')');
-    var filename = 'Laporan_' + periodLabel.replace(/\s/g, '_') + '.doc';
-    downloadWordDoc(html, filename);
-    hideLoading();
-    showToast(filtered.length + ' laporan berhasil dicetak ke Word', 'success');
-  } catch (e) {
-    hideLoading();
-    console.error('printByPeriod error:', e);
-    showToast('Gagal mencetak: ' + e.message, 'error');
-  }
+// --- Confirm Download Word after preview ---
+function confirmDownloadWord() {
+  if (!pendingWordHTML) return showToast('Tidak ada dokumen untuk diunduh', 'warning');
+  downloadWordDoc(pendingWordHTML, pendingWordFilename);
+  showToast('Dokumen berhasil diunduh', 'success');
+  closeModal('printPreviewModal');
+  pendingWordHTML = null;
+  pendingWordFilename = null;
 }
 
 // --- Generate Word-compatible HTML from reports ---
-// v6: Uses normalizeReport data, handles type/tipe, clean fotoUrl array
+// Each report gets its own page (page-break-before: always)
+// Photos are converted to base64 and embedded directly in the Word doc
 async function generateWordHTML(reports, title) {
   var reportsWithImages = [];
   for (var i = 0; i < reports.length; i++) {
@@ -1935,11 +2013,15 @@ async function generateWordHTML(reports, title) {
       }
     }
 
-    reportsWithImages.push({
-      data: r,
-      images: base64Images
-    });
+    reportsWithImages.push({ data: r, images: base64Images });
   }
+
+  // Sort by date ascending
+  reportsWithImages.sort(function(a, b) {
+    var ta = a.data.tanggal ? (a.data.tanggal.toDate ? a.data.tanggal.toDate() : new Date(a.data.tanggal)) : new Date(0);
+    var tb = b.data.tanggal ? (b.data.tanggal.toDate ? b.data.tanggal.toDate() : new Date(b.data.tanggal)) : new Date(0);
+    return ta - tb;
+  });
 
   var now = new Date();
   var timestamp = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -1950,50 +2032,50 @@ async function generateWordHTML(reports, title) {
     'xmlns="http://www.w3.org/TR/REC-html40">' +
     '<head><meta charset="utf-8">' +
     '<style>' +
-      'body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1a1a1a; margin: 40px; line-height: 1.6; }' +
-      '.header { text-align: center; border-bottom: 3px solid #c4161c; padding-bottom: 16px; margin-bottom: 24px; }' +
-      '.header h1 { font-size: 16pt; color: #c4161c; margin: 0 0 4px; font-weight: 700; }' +
-      '.header h2 { font-size: 12pt; color: #666; margin: 0; font-weight: 400; }' +
-      '.header .subtitle { font-size: 10pt; color: #999; margin-top: 8px; }' +
-      '.title { font-size: 14pt; font-weight: 700; text-align: center; margin: 20px 0; color: #1a1a1a; }' +
-      '.report { margin-bottom: 24px; page-break-inside: avoid; }' +
-      '.report-header { background: #f8f8f8; padding: 12px 16px; border-left: 4px solid #c4161c; margin-bottom: 12px; }' +
-      '.report-header h3 { font-size: 13pt; margin: 0 0 4px; color: #1a1a1a; }' +
+      'body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1a1a1a; margin: 2cm; line-height: 1.6; }' +
+      '.cover { text-align: center; border-bottom: 3px double #c4161c; padding-bottom: 20px; margin-bottom: 30px; page-break-after: always; }' +
+      '.cover h1 { font-size: 18pt; color: #c4161c; margin: 0 0 8px; font-weight: 700; letter-spacing: 1px; }' +
+      '.cover h2 { font-size: 13pt; color: #444; margin: 0 0 4px; font-weight: 400; }' +
+      '.cover .org { font-size: 11pt; color: #888; margin-top: 16px; }' +
+      '.cover .title-doc { font-size: 14pt; color: #1a1a1a; margin-top: 24px; font-weight: 700; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; padding: 12px 0; }' +
+      '.cover .timestamp { font-size: 9pt; color: #aaa; margin-top: 20px; }' +
+      '.report { page-break-before: always; margin-bottom: 20px; }' +
+      '.report:first-of-type { page-break-before: auto; }' +
+      '.report-header { background: #f8f8f8; padding: 14px 16px; border-left: 4px solid #c4161c; margin-bottom: 16px; }' +
+      '.report-header h3 { font-size: 14pt; margin: 0 0 6px; color: #1a1a1a; }' +
       '.report-meta { font-size: 9pt; color: #888; margin: 0; }' +
-      '.field { margin-bottom: 8px; }' +
+      '.field { margin-bottom: 10px; }' +
       '.field label { font-size: 9pt; font-weight: 700; color: #888; text-transform: uppercase; display: block; margin-bottom: 2px; letter-spacing: 0.5px; }' +
       '.field p { margin: 0; font-size: 11pt; }' +
-      '.field .value { font-size: 11pt; color: #1a1a1a; }' +
-      '.isi { background: #f5f5f5; padding: 12px 16px; border-radius: 4px; font-size: 11pt; line-height: 1.7; white-space: pre-wrap; margin: 8px 0; }' +
-      '.catatan { background: #fff7ed; padding: 10px 16px; border-left: 3px solid #ea580c; border-radius: 4px; font-size: 10pt; color: #ea580c; margin: 8px 0; }' +
+      '.isi { background: #f9f9f9; padding: 14px 16px; border-radius: 4px; font-size: 11pt; line-height: 1.8; white-space: pre-wrap; margin: 8px 0; border: 1px solid #eee; }' +
+      '.catatan { background: #fff7ed; padding: 12px 16px; border-left: 3px solid #ea580c; font-size: 10pt; color: #ea580c; margin: 8px 0; }' +
       '.status-approved { color: #16a34a; font-weight: 700; }' +
       '.status-pending { color: #ea580c; font-weight: 700; }' +
       '.status-rejected { color: #c4161c; font-weight: 700; }' +
       '.status-revisi { color: #2563eb; font-weight: 700; }' +
-      '.photos { margin: 12px 0; }' +
-      '.photos img { max-width: 400px; max-height: 300px; margin: 4px 8px 4px 0; border: 1px solid #e8e8e8; border-radius: 4px; }' +
-      '.page-break { page-break-before: always; border-top: 1px dashed #ccc; padding-top: 16px; margin-top: 16px; }' +
-      '.footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e8e8e8; text-align: center; font-size: 9pt; color: #999; }' +
-      '@page { margin: 2cm; }' +
+      '.photos { margin: 14px 0; }' +
+      '.photos-title { font-size: 9pt; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }' +
+      '.photos img { max-width: 450px; max-height: 340px; margin: 6px 10px 6px 0; border: 1px solid #e0e0e0; border-radius: 4px; display: inline; }' +
+      '.page-num { text-align: center; font-size: 9pt; color: #ccc; margin-top: 40px; }' +
+      '.footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #e8e8e8; text-align: center; font-size: 8pt; color: #bbb; }' +
+      '@page { margin: 2cm; size: A4; }' +
     '</style>' +
     '</head><body>' +
 
-    '<div class="header">' +
+    // Cover page
+    '<div class="cover">' +
       '<h1>LAPORAN TENAGA AHLI</h1>' +
-      '<h2>Fraksi PDI Perjuangan Kab. Kepulauan Meranti</h2>' +
-      '<div class="subtitle">' + esc(title) + '</div>' +
-    '</div>' +
+      '<h2>Fraksi PDI Perjuangan</h2>' +
+      '<div class="org">Kabupaten Kepulauan Meranti</div>' +
+      '<div class="title-doc">' + esc(title) + '</div>' +
+      '<div class="timestamp">' + reportsWithImages.length + ' laporan &middot; Dicetak: ' + timestamp + '</div>' +
+    '</div>';
 
-    '<div class="title">' + esc(title) + '</div>';
-
+  // Each report on a new page
   for (var k = 0; k < reportsWithImages.length; k++) {
     var item = reportsWithImages[k];
     var r = item.data;
     var imgs = item.images;
-
-    if (k > 0) {
-      html += '<div class="page-break"></div>';
-    }
 
     var reportType = r.type || 'Harian';
     var statusClass = r.status === 'approved' ? 'status-approved' : r.status === 'rejected' ? 'status-rejected' : r.status === 'revisi' ? 'status-revisi' : 'status-pending';
@@ -2005,10 +2087,10 @@ async function generateWordHTML(reports, title) {
         '<p class="report-meta">' + esc(r.nama || '-') + ' &middot; ' + formatDate(r.tanggal) + ' &middot; ' + esc(reportType) + ' &middot; <span class="' + statusClass + '">' + statusText + '</span></p>' +
       '</div>' +
 
-      '<div class="field"><label>Tenaga Ahli</label><p class="value"><b>' + esc(r.nama || '-') + '</b></p></div>' +
-      '<div class="field"><label>Tanggal Kegiatan</label><p class="value">' + formatDate(r.tanggal) + '</p></div>' +
-      '<div class="field"><label>Tipe Laporan</label><p class="value">' + esc(reportType) + '</p></div>' +
-      '<div class="field"><label>Status</label><p class="value"><span class="' + statusClass + '">' + statusText + '</span></p></div>' +
+      '<div class="field"><label>Tenaga Ahli</label><p><b>' + esc(r.nama || '-') + '</b></p></div>' +
+      '<div class="field"><label>Tanggal Kegiatan</label><p>' + formatDate(r.tanggal) + '</p></div>' +
+      '<div class="field"><label>Tipe Laporan</label><p>' + esc(reportType) + '</p></div>' +
+      '<div class="field"><label>Status</label><p><span class="' + statusClass + '">' + statusText + '</span></p></div>' +
       '<div class="field"><label>Isi Laporan</label></div>' +
       '<div class="isi">' + esc(r.isi || '-') + '</div>';
 
@@ -2018,8 +2100,7 @@ async function generateWordHTML(reports, title) {
     }
 
     if (imgs.length > 0) {
-      html += '<div class="field"><label>Foto Kegiatan (' + imgs.length + ')</label></div>' +
-        '<div class="photos">';
+      html += '<div class="photos"><div class="photos-title">Foto Kegiatan (' + imgs.length + ')</div>';
       for (var p = 0; p < imgs.length; p++) {
         html += '<img src="' + imgs[p] + '">';
       }
@@ -2029,12 +2110,7 @@ async function generateWordHTML(reports, title) {
     html += '</div>';
   }
 
-  html += '<div class="footer">' +
-    'Dokumen ini dicetak otomatis dari Sistem Laporan Tenaga Ahli<br>' +
-    'Fraksi PDI Perjuangan Kab. Kepulauan Meranti<br>' +
-    'Tanggal cetak: ' + timestamp +
-  '</div>';
-
+  html += '<div class="footer">Dokumen ini dicetak otomatis dari Sistem Laporan Tenaga Ahli<br>Fraksi PDI Perjuangan Kab. Kepulauan Meranti</div>';
   html += '</body></html>';
   return html;
 }
