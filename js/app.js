@@ -1176,7 +1176,7 @@ function renderAdminDashUsers() {
   el.innerHTML = h;
 }
 
-// --- Render Admin Reports from cached data (with period filter + checkboxes) ---
+// --- Render Admin Reports grouped by TA user ---
 function renderAdminReportList() {
   var periodEl = document.getElementById('aPeriod');
   var period = periodEl ? periodEl.value : 'all';
@@ -1192,52 +1192,138 @@ function renderAdminReportList() {
 
   var isAdmin = currentUser && currentUser.role === 'admin';
 
+  // Build user info lookup from cached admin users
+  var userInfo = {};
+  cachedAdminUsers.forEach(function(u) {
+    userInfo[u.id] = u.data;
+  });
+
+  // Group reports by userId
+  var grouped = {};
+  filtered.forEach(function(item) {
+    var uid = item.data.userId || 'unknown';
+    if (!grouped[uid]) grouped[uid] = [];
+    grouped[uid].push(item);
+  });
+
+  // Sort users: most reports first
+  var userIds = Object.keys(grouped).sort(function(a, b) {
+    return grouped[b].length - grouped[a].length;
+  });
+
+  // Header with print button
   var header = '';
-  if (isAdmin) {
-    var allChecked = filtered.length > 0 && filtered.every(function(item) { return selectedReportIds.has(item.id); });
-    header = '<div class="report-item" style="background:var(--bg);cursor:default;border-bottom:1px solid var(--border)">' +
-      '<div style="display:flex;align-items:center;gap:10px;width:100%">' +
-        '<input type="checkbox" ' + (allChecked ? 'checked' : '') + ' onchange="toggleSelectAllReports(this.checked)" style="width:18px;height:18px;cursor:pointer;accent-color:var(--red)">' +
-        '<span style="font-size:12px;font-weight:600;color:var(--text2)">Pilih Semua (' + filtered.length + ')</span>' +
-        (selectedReportIds.size > 0 ? '<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="event.stopPropagation();openPrintOptions()">\uD83D\uDDA8 Cetak (' + selectedReportIds.size + ')</button>' : '') +
-      '</div>' +
+  if (isAdmin && selectedReportIds.size > 0) {
+    header = '<div style="padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">' +
+      '<span style="font-size:12px;font-weight:600;color:var(--text2)">' + selectedReportIds.size + ' laporan dipilih</span>' +
+      '<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="openPrintOptions()">\uD83D\uDDA8 Cetak Word</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="clearAllReportSelections()">Batal</button>' +
     '</div>';
   }
 
   var h = header;
-  filtered.forEach(function(item) {
-    var r = item.data;
-    var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
-    var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
-    var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
-    var isChecked = selectedReportIds.has(item.id);
+  var totalUsers = userIds.length;
+  var totalReports = filtered.length;
 
-    var quickBtns = '';
-    if ((r.status === 'pending' || r.status === 'revisi') && isAdmin) {
-      quickBtns = ' &middot; <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="event.stopPropagation();quickRevise(\'' + item.id + '\')">\u21BB</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
+  // Summary bar
+  h += '<div style="padding:10px 16px;background:var(--red-light);border-bottom:1px solid var(--border);font-size:12px;color:var(--red-dark);font-weight:600">' +
+    totalUsers + ' Tenaga Ahli &middot; ' + totalReports + ' Laporan' +
+  '</div>';
+
+  userIds.forEach(function(uid) {
+    var reports = grouped[uid];
+    var u = userInfo[uid] || {};
+    var nama = u.nama || reports[0].data.nama || 'Unknown';
+    var jabatan = u.jabatan || '-';
+    var userPhoto = u.photo || '';
+    var userStatus = u.status || 'active';
+
+    // User header with avatar, name, and report count
+    var avatarHtml = '';
+    if (userPhoto) {
+      avatarHtml = '<div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-right:10px"><img src="' + userPhoto + '" style="width:100%;height:100%;object-fit:cover"></div>';
+    } else {
+      var initial = nama.charAt(0).toUpperCase();
+      avatarHtml = '<div style="width:36px;height:36px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0;margin-right:10px">' + initial + '</div>';
     }
 
-    var checkbox = '';
-    if (isAdmin) {
-      checkbox = '<div style="display:flex;align-items:center;margin-right:10px" onclick="event.stopPropagation()">' +
-        '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleReportSelect(\'' + item.id + '\', this.checked)" style="width:18px;height:18px;cursor:pointer;accent-color:var(--red)">' +
-      '</div>';
-    }
+    var statusLabel = userStatus === 'active' ? '' : ' <span class="status status-' + userStatus + '" style="font-size:9px;padding:1px 6px">' + (userStatus === 'pending' ? 'Menunggu' : 'Ditolak') + '</span>';
 
-    h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')" style="display:flex;align-items:center">' +
-      checkbox +
-      '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
-      '<div class="ri-body">' +
-        '<div class="ri-title">' + esc(r.judul) + '</div>' +
-        '<div class="ri-sub">' + esc(r.nama || '-') + ' &middot; ' + formatDate(r.tanggal) + '</div>' +
-        '<div class="ri-meta">' +
-          '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
-          quickBtns +
+    // Collapsible user group
+    var groupId = 'ug_' + uid.replace(/[^a-zA-Z0-9]/g, '');
+    h += '<div class="user-report-group" style="margin-bottom:4px">' +
+      '<div class="report-item" style="background:var(--bg);cursor:pointer;border-bottom:1px solid var(--border);border-top:2px solid var(--red)" onclick="toggleUserGroup(\'' + groupId + '\')">' +
+        avatarHtml +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px">' + esc(nama) + statusLabel + '</div>' +
+          '<div style="font-size:11px;color:var(--text2)">' + esc(jabatan) + '</div>' +
         '</div>' +
+        '<div style="text-align:center;flex-shrink:0;margin-right:8px">' +
+          '<div style="font-size:18px;font-weight:800;color:var(--red)">' + reports.length + '</div>' +
+          '<div style="font-size:9px;color:var(--text3);font-weight:600">LAPORAN</div>' +
+        '</div>' +
+        '<div style="color:var(--text3);font-size:12px;transition:transform .2s" id="chevron_' + groupId + '">&#9660;</div>' +
       '</div>' +
-    '</div>';
+      '<div id="' + groupId + '" style="border-bottom:1px solid var(--border)">';
+
+    // Reports under this user
+    reports.forEach(function(item) {
+      var r = item.data;
+      var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+      var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+      var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
+      var isChecked = selectedReportIds.has(item.id);
+
+      var quickBtns = '';
+      if ((r.status === 'pending' || r.status === 'revisi') && isAdmin) {
+        quickBtns = ' <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="event.stopPropagation();quickRevise(\'' + item.id + '\')">\u21BB</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
+      }
+
+      var checkbox = '';
+      if (isAdmin) {
+        checkbox = '<div style="display:flex;align-items:center;margin-right:8px" onclick="event.stopPropagation()">' +
+          '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleReportSelect(\'' + item.id + '\', this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--red)">' +
+        '</div>';
+      }
+
+      h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')" style="display:flex;align-items:center;padding-left:56px">' +
+        checkbox +
+        '<div class="ri-icon" style="background:' + iconBg + ';width:36px;height:36px;font-size:15px">\uD83D\uDCC4</div>' +
+        '<div class="ri-body" style="flex:1;min-width:0">' +
+          '<div class="ri-title">' + esc(r.judul) + '</div>' +
+          '<div class="ri-sub">' + formatDate(r.tanggal) + ' &middot; ' + esc(r.type || 'Harian') + '</div>' +
+          '<div class="ri-meta">' +
+            '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
+            quickBtns +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    });
+
+    h += '</div></div>';
   });
+
   container.innerHTML = h;
+}
+
+// Toggle expand/collapse user report group
+function toggleUserGroup(groupId) {
+  var el = document.getElementById(groupId);
+  var chevron = document.getElementById('chevron_' + groupId);
+  if (!el) return;
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    if (chevron) chevron.innerHTML = '&#9660;';
+  } else {
+    el.style.display = 'none';
+    if (chevron) chevron.innerHTML = '&#9654;';
+  }
+}
+
+// Clear all report selections
+function clearAllReportSelections() {
+  selectedReportIds.clear();
+  renderAdminReportList();
 }
 
 function renderAdminUserList() {
