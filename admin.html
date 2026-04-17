@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#ffffff">
   <title>Admin - PDI TA App</title>
-  <link rel="stylesheet" href="css/style.css?v=4">
+  <link rel="stylesheet" href="css/style.css?v=6">
   <style>
 /* ============================================
    PDI TA App — Modern Minimalist Design v3
@@ -273,6 +273,10 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 .font-bold { font-weight: 700; }
 .w-full { width: 100%; }
 .hidden { display: none !important; }
+.print-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.print-toolbar .btn { font-size: 11px; padding: 6px 12px; }
+.report-check { display: flex; align-items: center; margin-right: 10px; }
+.report-check input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--red); cursor: pointer; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   </style>
 </head>
@@ -366,6 +370,13 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
           <option value="yearly">Tahun Ini</option>
         </select>
         <button class="btn btn-outline btn-sm" onclick="loadAdminReports()">Refresh</button>
+      </div>
+
+      <div class="print-toolbar no-print">
+        <button class="btn btn-outline btn-sm" onclick="printSelectedReports()">🖨️ Cetak Pilihan</button>
+        <button class="btn btn-outline btn-sm" onclick="printAllReports()">🖨️ Cetak Semua</button>
+        <button class="btn btn-outline btn-sm" onclick="printByPeriod('Hari Ini','daily')">🖨️ Cetak Hari Ini</button>
+        <button class="btn btn-outline btn-sm" onclick="printByPeriod('Bulan Ini','monthly')">🖨️ Cetak Bulan Ini</button>
       </div>
 
       <div class="card">
@@ -467,7 +478,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=4"></script>
+<script src="js/app.js?v=6"></script>
 <script>
 const ADMIN_PIN = 'pdimeranti2025';
 
@@ -523,5 +534,20 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('adminKey').focus();
 });
 </script>
+
+<!-- PRINT OPTIONS MODAL -->
+<div class="modal-overlay" id="printModal" onclick="if(event.target===this)closeModal('printModal')">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-top">
+      <h3>Cetak Laporan</h3>
+      <button class="modal-close" onclick="closeModal('printModal')">&times;</button>
+    </div>
+    <div class="modal-content" id="printModalBody">
+      <!-- Content will be dynamically generated -->
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
