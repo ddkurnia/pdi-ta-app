@@ -155,6 +155,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 .status-pending { background: var(--orange-bg); color: var(--orange); }
 .status-approved { background: var(--green-bg); color: var(--green); }
 .status-rejected { background: var(--red-light); color: var(--red); }
+.status-revisi { background: var(--blue-bg); color: var(--blue); }
 .status-active { background: var(--green-bg); color: var(--green); }
 .status-wait { background: var(--orange-bg); color: var(--orange); }
 
@@ -337,7 +338,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
         </div>
         <div class="stat-card">
           <div class="stat-num" id="a_okRep" style="color:var(--green)">0</div>
-          <div class="stat-label">Disetujui</div>
+          <div class="stat-label">Diterima</div>
         </div>
         <div class="stat-card">
           <div class="stat-num" id="a_monthRep" style="color:var(--blue)">0</div>
@@ -373,10 +374,9 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
       </div>
 
       <div class="print-toolbar no-print">
-        <button class="btn btn-outline btn-sm" onclick="printSelectedReports()">🖨️ Cetak Pilihan</button>
-        <button class="btn btn-outline btn-sm" onclick="printAllReports()">🖨️ Cetak Semua</button>
-        <button class="btn btn-outline btn-sm" onclick="printByPeriod('Hari Ini','daily')">🖨️ Cetak Hari Ini</button>
-        <button class="btn btn-outline btn-sm" onclick="printByPeriod('Bulan Ini','monthly')">🖨️ Cetak Bulan Ini</button>
+        <button class="btn btn-outline btn-sm" onclick="openPrintOptions()">📝 Review & Cetak Word</button>
+        <button class="btn btn-outline btn-sm" onclick="printByPeriod('Hari Ini','daily')">📅 Hari Ini</button>
+        <button class="btn btn-outline btn-sm" onclick="printByPeriod('Bulan Ini','monthly')">📆 Bulan Ini</button>
       </div>
 
       <div class="card">
@@ -478,7 +478,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=6"></script>
+<script src="js/app.js?v=7"></script>
 <script>
 const ADMIN_PIN = 'pdimeranti2025';
 
@@ -491,6 +491,8 @@ async function doAdminLogin() {
   try {
     const result = await auth.signInAnonymously();
     currentUser = { uid: result.user.uid, nama: 'Admin', role: 'admin', status: 'active' };
+    // Save admin login state to localStorage (persists across refresh)
+    localStorage.setItem('pdi_admin_logged_in', 'true');
     document.getElementById('adminLogin').style.display = 'none';
     document.getElementById('adminApp').style.display = 'flex';
     // Init real-time notifications (admin role = true, includes 'admin' target)
@@ -513,6 +515,8 @@ function doAdminLogout() {
   if (confirm('Keluar dari panel admin?')) {
     cleanupListeners();
     currentUser = null;
+    // Clear admin login state from localStorage
+    localStorage.removeItem('pdi_admin_logged_in');
     auth.signOut().catch(function(){});
     document.getElementById('adminApp').style.display = 'none';
     document.getElementById('adminLogin').style.display = 'flex';
@@ -531,7 +535,31 @@ function searchTA(q) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-  document.getElementById('adminKey').focus();
+  // Check if admin was previously logged in (persist session across refresh)
+  var adminLoggedIn = localStorage.getItem('pdi_admin_logged_in') === 'true';
+
+  if (adminLoggedIn) {
+    // Try to restore session from Firebase anonymous auth
+    showLoading();
+    auth.onAuthStateChanged(function(user) {
+      hideLoading();
+      if (user && user.isAnonymous) {
+        // Session restored - show admin panel directly
+        currentUser = { uid: user.uid, nama: 'Admin', role: 'admin', status: 'active' };
+        document.getElementById('adminLogin').style.display = 'none';
+        document.getElementById('adminApp').style.display = 'flex';
+        initNotifs(currentUser.uid, true);
+        initAdminRealtime();
+        switchPage('a_home');
+      } else {
+        // No valid session - show login form
+        localStorage.removeItem('pdi_admin_logged_in');
+        document.getElementById('adminKey').focus();
+      }
+    });
+  } else {
+    document.getElementById('adminKey').focus();
+  }
 });
 </script>
 
