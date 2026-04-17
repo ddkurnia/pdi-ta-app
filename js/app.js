@@ -1334,6 +1334,8 @@ function renderAdminUserList() {
       actions += ' <button class="btn btn-green btn-sm" onclick="approveUser(\'' + item.id + '\')">\u2713</button>' +
                  ' <button class="btn btn-red btn-sm" onclick="rejectUser(\'' + item.id + '\')">\u2717</button>';
     }
+    // Delete button for all users
+    actions += ' <button class="btn btn-ghost btn-sm" onclick="deleteUser(\'' + item.id + '\')" title="Hapus user" style="color:var(--text3);font-size:16px;margin-left:4px">\uD83D\uDDD1</button>';
 
     h += '<div class="pend-user" style="align-items:center">' +
       avatarHtml +
@@ -1436,6 +1438,45 @@ async function rejectUser(uid) {
     hideLoading();
     showToast('User ditolak', 'success');
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+async function deleteUser(uid) {
+  // Get user name for confirmation
+  var userName = 'User';
+  try {
+    var uDoc = await db.collection('users').doc(uid).get();
+    if (uDoc.exists) userName = uDoc.data().nama || uDoc.data().email || 'User';
+  } catch(e) {}
+
+  if (!confirm('Hapus user "' + userName + '"?\n\nSemua laporan user ini juga akan dihapus. Tindakan ini tidak dapat dibatalkan.')) return;
+
+  showLoading();
+  try {
+    // 1. Delete all reports by this user
+    var repSnap = await db.collection('laporan').where('userId', '==', uid).get();
+    if (repSnap.size > 0) {
+      var batch = db.batch();
+      repSnap.forEach(function(doc) { batch.delete(doc.ref); });
+      await batch.commit();
+    }
+
+    // 2. Delete all notifications for this user
+    var notifSnap = await db.collection('notifikasi').where('target', '==', uid).limit(100).get();
+    if (notifSnap.size > 0) {
+      var batch2 = db.batch();
+      notifSnap.forEach(function(doc) { batch2.delete(doc.ref); });
+      await batch2.commit();
+    }
+
+    // 3. Delete user document from Firestore
+    await db.collection('users').doc(uid).delete();
+
+    hideLoading();
+    showToast('User "' + userName + '" berhasil dihapus beserta ' + repSnap.size + ' laporan', 'success');
+  } catch (e) {
+    hideLoading();
+    showToast('Gagal menghapus: ' + e.message, 'error');
+  }
 }
 
 // v6: Fallback - removed orderBy from compound query, sort client-side
