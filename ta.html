@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#ffffff">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>PDI TA App</title>
-  <link rel="stylesheet" href="css/style.css?v=4">
+  <link rel="stylesheet" href="css/style.css?v=6">
   <style>
 /* ============================================
    PDI TA App — Modern Minimalist Design v3
@@ -392,9 +392,9 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
     <div id="page_riwayat" class="tab-page">
       <div class="filter-bar no-print">
         <select id="fPeriod" class="form-input" onchange="loadLaporan()">
-          <option value="all">Semua</option>
+          <option value="all" selected>Semua</option>
           <option value="daily">Hari Ini</option>
-          <option value="monthly" selected>Bulan Ini</option>
+          <option value="monthly">Bulan Ini</option>
           <option value="yearly">Tahun Ini</option>
         </select>
         <button class="btn btn-outline btn-sm" onclick="loadLaporan()">Refresh</button>
@@ -420,10 +420,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
           <h3>Riwayat Laporan</h3>
         </div>
         <div id="riwayatList">
-          <div class="empty-state">
-            <div class="empty-icon">📋</div>
-            <h4>Pilih tab Riwayat</h4>
-          </div>
+          <div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan</h4><p>Buat laporan pertama Anda</p></div>
         </div>
       </div>
     </div>
@@ -537,7 +534,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=4"></script>
+<script src="js/app.js?v=6"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
   try {
