@@ -1859,10 +1859,20 @@ async function sendBroadcast() {
   if (!title || !msg) return showToast('Judul dan pesan wajib diisi', 'error');
   showLoading();
   try {
-    var snap = await db.collection('users').where('role', '==', 'ta').where('status', '==', 'active').get();
-    var batch = db.batch();
+    var snap = await db.collection('users').where('role', '==', 'ta').get();
+    // Filter active users client-side (avoids composite index requirement)
+    var activeUsers = [];
     snap.forEach(function(d) {
-      batch.add(db.collection('notifikasi'), {
+      if (d.data().status === 'active') activeUsers.push(d);
+    });
+    if (activeUsers.length === 0) {
+      hideLoading();
+      return showToast('Tidak ada TA aktif untuk dikirimi broadcast', 'error');
+    }
+    var batch = db.batch();
+    activeUsers.forEach(function(d) {
+      var newDocRef = db.collection('notifikasi').doc();
+      batch.set(newDocRef, {
         judul: title,
         pesan: msg,
         target: d.id,
@@ -1873,12 +1883,13 @@ async function sendBroadcast() {
     });
     await batch.commit();
     hideLoading();
-    showToast('Broadcast terkirim ke ' + snap.size + ' TA', 'success');
+    showToast('Broadcast terkirim ke ' + activeUsers.length + ' TA', 'success');
     closeModal('bcModal');
     $sv('bcTitle', ''); $sv('bcMsg', '');
   } catch (e) {
     hideLoading();
-    showToast('Gagal: ' + e.message, 'error');
+    console.error('[Broadcast] Error:', e.code, e.message);
+    showToast('Gagal kirim broadcast: ' + e.message, 'error');
   }
 }
 
