@@ -1,5 +1,5 @@
 // ============================================================
-// PDI TA App - All-in-One JavaScript (Modern Minimalist)
+// PDI TA App - All-in-One JavaScript (Real-Time Edition v4)
 // ============================================================
 
 // --- Firebase Config ---
@@ -24,6 +24,14 @@ const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/uplo
 let currentUser = null;
 let uploadedPhotos = [];
 let notifUnsubscribe = null;
+
+// Real-time cached data
+let taReportUnsub = null;
+let adminReportUnsub = null;
+let adminUserUnsub = null;
+let cachedTAReports = [];
+let cachedAdminReports = [];
+let cachedAdminUsers = [];
 
 // ============================================================
 // UTILITIES
@@ -82,14 +90,28 @@ function getDateRange(p) {
   }
   return {
     start: firebase.firestore.Timestamp.fromDate(s),
-    end: firebase.firestore.Timestamp.fromDate(e)
+    end: firebase.firestore.Timestamp.fromDate(e),
+    startDate: s,
+    endDate: e
   };
+}
+
+// Filter cached reports by period (client-side)
+function filterByPeriod(reports, period) {
+  if (period === 'all') return reports;
+  const { startDate, endDate } = getDateRange(period);
+  return reports.filter(r => {
+    if (!r.createdAt) return false;
+    const ts = r.createdAt.toDate ? r.createdAt.toDate() : new Date(r.createdAt);
+    return ts >= startDate && ts < endDate;
+  });
 }
 
 // ============================================================
 // TOAST
 // ============================================================
-function showToast(msg, type = 'info') {
+function showToast(msg, type) {
+  type = type || 'info';
   let c = document.getElementById('toastArea');
   if (!c) {
     c = document.createElement('div');
@@ -97,16 +119,16 @@ function showToast(msg, type = 'info') {
     c.className = 'toast-area';
     document.body.appendChild(c);
   }
-  const icons = { success: '✓', error: '✗', warning: '⚠', info: 'ℹ' };
+  const icons = { success: '\u2713', error: '\u2717', warning: '\u26A0', info: '\u2139' };
   const t = document.createElement('div');
   t.className = 'toast-msg toast-' + type;
-  t.innerHTML = `<span>${icons[type] || ''}</span><span>${msg}</span>`;
+  t.innerHTML = '<span>' + (icons[type] || '') + '</span><span>' + msg + '</span>';
   c.appendChild(t);
-  setTimeout(() => {
+  setTimeout(function() {
     t.style.opacity = '0';
     t.style.transform = 'translateY(-10px)';
     t.style.transition = '.3s';
-    setTimeout(() => t.remove(), 300);
+    setTimeout(function() { t.remove(); }, 300);
   }, 3000);
 }
 
@@ -144,60 +166,157 @@ function openModal(id) {
 function openLightbox(src) {
   const lb = document.createElement('div');
   lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:8000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
-  lb.onclick = () => lb.remove();
-  lb.innerHTML = `<img src="${src}" style="max-width:92vw;max-height:92vh;border-radius:12px;object-fit:contain;">`;
+  lb.onclick = function() { lb.remove(); };
+  lb.innerHTML = '<img src="' + src + '" style="max-width:92vw;max-height:92vh;border-radius:12px;object-fit:contain;">';
   document.body.appendChild(lb);
 }
 
 // ============================================================
-// PAGE NAVIGATION (TA & Admin)
+// REAL-TIME LISTENERS
+// ============================================================
+
+// --- Cleanup all listeners ---
+function cleanupListeners() {
+  if (taReportUnsub) { taReportUnsub(); taReportUnsub = null; }
+  if (adminReportUnsub) { adminReportUnsub(); adminReportUnsub = null; }
+  if (adminUserUnsub) { adminUserUnsub(); adminUserUnsub = null; }
+  if (notifUnsubscribe) { notifUnsubscribe(); notifUnsubscribe = null; }
+  cachedTAReports = [];
+  cachedAdminReports = [];
+  cachedAdminUsers = [];
+}
+
+// --- TA Real-time: Listen to own reports ---
+function initTARealtime() {
+  if (!currentUser || currentUser.role !== 'ta') return;
+  if (taReportUnsub) taReportUnsub();
+
+  const uid = currentUser.uid;
+  taReportUnsub = db.collection('laporan')
+    .where('userId', '==', uid)
+    .orderBy('createdAt', 'desc')
+    .limit(100)
+    .onSnapshot(function(snap) {
+      cachedTAReports = [];
+      snap.forEach(function(d) {
+        cachedTAReports.push({ id: d.id, data: d.data() });
+      });
+      // Auto-update UI based on current active tab
+      renderTADashboard();
+      renderRiwayat();
+    }, function(err) {
+      console.error('TA realtime error:', err);
+      // On error, show empty state instead of stuck "Memuat..."
+      var container = document.getElementById('recentList');
+      if (container && container.querySelector('.empty-state') === null && container.textContent.indexOf('Memuat') >= 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+      }
+    });
+}
+
+// --- Admin Real-time: Listen to all reports ---
+function initAdminReportRealtime() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  if (adminReportUnsub) adminReportUnsub();
+
+  adminReportUnsub = db.collection('laporan')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .onSnapshot(function(snap) {
+      cachedAdminReports = [];
+      snap.forEach(function(d) {
+        cachedAdminReports.push({ id: d.id, data: d.data() });
+      });
+      renderAdminDashStats();
+      renderAdminReportList();
+    }, function(err) {
+      console.error('Admin reports realtime error:', err);
+      var container = document.getElementById('adminRepList');
+      if (container && container.textContent.indexOf('Memuat') >= 0) {
+        container.innerHTML = '<div class="empty-state"><h4>Gagal memuat data</h4></div>';
+      }
+    });
+}
+
+// --- Admin Real-time: Listen to all TA users ---
+function initAdminUserRealtime() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  if (adminUserUnsub) adminUserUnsub();
+
+  adminUserUnsub = db.collection('users')
+    .where('role', '==', 'ta')
+    .orderBy('createdAt', 'desc')
+    .onSnapshot(function(snap) {
+      cachedAdminUsers = [];
+      snap.forEach(function(d) {
+        cachedAdminUsers.push({ id: d.id, data: d.data() });
+      });
+      renderAdminDashUsers();
+      renderAdminUserList();
+    }, function(err) {
+      console.error('Admin users realtime error:', err);
+      var container = document.getElementById('adminUserList');
+      if (container && container.textContent.indexOf('Memuat') >= 0) {
+        container.innerHTML = '<div class="empty-state"><h4>Gagal memuat data</h4></div>';
+      }
+    });
+}
+
+// --- Init all admin listeners ---
+function initAdminRealtime() {
+  initAdminReportRealtime();
+  initAdminUserRealtime();
+}
+
+// ============================================================
+// PAGE NAVIGATION
 // ============================================================
 function switchPage(name) {
   // Hide all pages
-  document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-page').forEach(function(p) { p.classList.remove('active'); });
   // Show selected
-  const el = document.getElementById('page_' + name);
+  var el = document.getElementById('page_' + name);
   if (el) el.classList.add('active');
 
   // Update nav items
-  document.querySelectorAll('.nav-item').forEach(n => {
+  document.querySelectorAll('.nav-item').forEach(function(n) {
     n.classList.toggle('active', n.dataset.page === name);
   });
 
   // Update title
-  const titles = {
+  var titles = {
     home: 'Beranda', buat: 'Buat Laporan', riwayat: 'Riwayat', profil: 'Profil',
     a_home: 'Dashboard', a_laporan: 'Kelola Laporan', a_user: 'Kelola TA'
   };
-  const pt = document.getElementById('pageTitle');
+  var pt = document.getElementById('pageTitle');
   if (pt && titles[name]) pt.textContent = titles[name];
 
-  // Load data
-  if (name === 'home') loadTADashboard();
+  // For real-time, just re-render from cached data (no fetch needed)
+  if (name === 'home') renderTADashboard();
   if (name === 'buat') loadBuatForm();
-  if (name === 'riwayat') loadLaporan();
+  if (name === 'riwayat') renderRiwayat();
   if (name === 'profil') loadProfil();
-  if (name === 'a_home') loadAdminDash();
-  if (name === 'a_laporan') loadAdminReports();
-  if (name === 'a_user') loadAdminUsers();
+  if (name === 'a_home') { renderAdminDashStats(); renderAdminDashUsers(); }
+  if (name === 'a_laporan') renderAdminReportList();
+  if (name === 'a_user') renderAdminUserList();
 }
 
 // ============================================================
 // AUTH
 // ============================================================
 function checkAuth(role) {
-  return new Promise((resolve, reject) => {
-    auth.onAuthStateChanged(async user => {
+  return new Promise(function(resolve, reject) {
+    auth.onAuthStateChanged(async function(user) {
       if (!user) { location.href = 'index.html'; return reject('no auth'); }
       try {
-        const doc = await db.collection('users').doc(user.uid).get();
+        var doc = await db.collection('users').doc(user.uid).get();
         if (!doc.exists) {
           showToast('Data user tidak ditemukan', 'error');
           auth.signOut();
           location.href = 'index.html';
           return reject('no data');
         }
-        const u = doc.data();
+        var u = doc.data();
         if (u.status !== 'active') {
           showToast('Akun belum di-approve admin', 'warning');
           auth.signOut();
@@ -209,7 +328,7 @@ function checkAuth(role) {
           location.href = u.role === 'admin' ? 'admin.html' : 'ta.html';
           return reject('wrong role');
         }
-        currentUser = { uid: user.uid, ...u };
+        currentUser = { uid: user.uid, email: user.email, role: u.role, ...u };
         resolve(currentUser);
       } catch (e) {
         console.error('checkAuth error:', e);
@@ -221,30 +340,29 @@ function checkAuth(role) {
 
 function logout() {
   if (confirm('Keluar dari aplikasi?')) {
-    auth.signOut().then(() => location.href = 'index.html').catch(e => showToast(e.message, 'error'));
+    cleanupListeners();
+    auth.signOut().then(function() { location.href = 'index.html'; }).catch(function(e) { showToast(e.message, 'error'); });
   }
 }
 
 function confirmLogout() {
-  if (confirm('Keluar dari aplikasi?')) {
-    auth.signOut().then(() => location.href = 'index.html').catch(e => showToast(e.message, 'error'));
-  }
+  logout();
 }
 
 async function doLogin() {
-  const email = $v('loginEmail'), pw = $v('loginPassword');
+  var email = $v('loginEmail'), pw = $v('loginPassword');
   if (!email || !pw) return showToast('Isi email dan password', 'error');
   showLoading();
   try {
-    const res = await auth.signInWithEmailAndPassword(email, pw);
-    const doc = await db.collection('users').doc(res.user.uid).get();
+    var res = await auth.signInWithEmailAndPassword(email, pw);
+    var doc = await db.collection('users').doc(res.user.uid).get();
     if (!doc.exists) {
       hideLoading();
       showToast('Data user tidak ditemukan', 'error');
       auth.signOut();
       return;
     }
-    const u = doc.data();
+    var u = doc.data();
     if (u.status === 'pending') {
       hideLoading();
       showToast('Akun belum di-approve. Hubungi admin.', 'warning');
@@ -262,7 +380,7 @@ async function doLogin() {
     location.href = u.role === 'admin' ? 'admin.html' : 'ta.html';
   } catch (e) {
     hideLoading();
-    const m = {
+    var m = {
       'auth/user-not-found': 'Email tidak terdaftar',
       'auth/wrong-password': 'Password salah',
       'auth/invalid-email': 'Format email tidak valid',
@@ -274,13 +392,13 @@ async function doLogin() {
 }
 
 async function doRegister() {
-  const nama = $v('regNama'), email = $v('regEmail'), pw = $v('regPw'), cpw = $v('regPwC');
+  var nama = $v('regNama'), email = $v('regEmail'), pw = $v('regPw'), cpw = $v('regPwC');
   if (!nama || !email || !pw || !cpw) return showToast('Semua field wajib diisi', 'error');
   if (pw.length < 6) return showToast('Password minimal 6 karakter', 'error');
   if (pw !== cpw) return showToast('Konfirmasi password tidak cocok', 'error');
   showLoading();
   try {
-    const r = await auth.createUserWithEmailAndPassword(email, pw);
+    var r = await auth.createUserWithEmailAndPassword(email, pw);
     await db.collection('users').doc(r.user.uid).set({
       email: email,
       nama: nama,
@@ -297,7 +415,7 @@ async function doRegister() {
     if (auth.currentUser && e.code && !e.code.startsWith('auth/')) {
       try { await auth.currentUser.delete(); } catch (delErr) {}
     }
-    const m = {
+    var m = {
       'auth/email-already-in-use': 'Email sudah terdaftar',
       'auth/invalid-email': 'Format email tidak valid',
       'auth/weak-password': 'Password terlalu lemah',
@@ -312,13 +430,13 @@ async function doRegister() {
 function switchAuthTab(t) {
   document.getElementById('formLogin').style.display = t === 'login' ? 'block' : 'none';
   document.getElementById('formRegister').style.display = t === 'register' ? 'block' : 'none';
-  document.querySelectorAll('.auth-toggle button').forEach(b => {
+  document.querySelectorAll('.auth-toggle button').forEach(function(b) {
     b.classList.toggle('active', (t === 'login' && b.textContent === 'Masuk') || (t === 'register' && b.textContent === 'Daftar'));
   });
 }
 
 async function doResetPw() {
-  const email = $v('loginEmail');
+  var email = $v('loginEmail');
   if (!email) return showToast('Masukkan email dulu', 'error');
   try {
     await auth.sendPasswordResetEmail(email);
@@ -330,37 +448,38 @@ async function doResetPw() {
 // CLOUDINARY UPLOAD
 // ============================================================
 async function uploadToCloudinary(file) {
-  const fd = new FormData();
+  var fd = new FormData();
   fd.append('file', file);
   fd.append('upload_preset', UPLOAD_PRESET);
   try {
-    const r = await fetch(CLOUDINARY_URL, { method: 'POST', body: fd });
-    if (r.ok) { const d = await r.json(); return d.secure_url; }
+    var r = await fetch(CLOUDINARY_URL, { method: 'POST', body: fd });
+    if (r.ok) { var d = await r.json(); return d.secure_url; }
   } catch (e) {
     console.warn('Cloudinary gagal, pakai base64:', e);
   }
-  return new Promise((res, rej) => {
-    const fr = new FileReader();
-    fr.onload = () => res(fr.result);
+  return new Promise(function(res, rej) {
+    var fr = new FileReader();
+    fr.onload = function() { res(fr.result); };
     fr.onerror = rej;
     fr.readAsDataURL(file);
   });
 }
 
 async function processFiles(input, gridId) {
-  const files = Array.from(input.files);
+  var files = Array.from(input.files);
   if (!files.length) return;
-  for (const f of files) {
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
     if (f.size > 5 * 1024 * 1024) { showToast(f.name + ' terlalu besar', 'warning'); continue; }
     if (!f.type.startsWith('image/')) { showToast(f.name + ' bukan gambar', 'warning'); continue; }
     showToast('Mengupload ' + f.name + '...', 'info');
     try {
-      const url = await uploadToCloudinary(f);
+      var url = await uploadToCloudinary(f);
       uploadedPhotos.push(url);
-      const g = document.getElementById(gridId);
-      const d = document.createElement('div');
+      var g = document.getElementById(gridId);
+      var d = document.createElement('div');
       d.className = 'photo-thumb';
-      d.innerHTML = `<img src="${url}"><button class="rm-btn" onclick="rmPhoto(this,'${url}')">&times;</button>`;
+      d.innerHTML = '<img src="' + url + '"><button class="rm-btn" onclick="rmPhoto(this,\'' + url + '\')">&times;</button>';
       g.appendChild(d);
       showToast('Foto berhasil diupload', 'success');
     } catch (e) { showToast('Gagal upload ' + f.name, 'error'); }
@@ -369,31 +488,34 @@ async function processFiles(input, gridId) {
 }
 
 function rmPhoto(btn, url) {
-  uploadedPhotos = uploadedPhotos.filter(u => u !== url);
+  uploadedPhotos = uploadedPhotos.filter(function(u) { return u !== url; });
   btn.parentElement.remove();
 }
 
 // ============================================================
-// NOTIFICATIONS
+// NOTIFICATIONS (FIXED: includes 'admin' target for admin users)
 // ============================================================
-function initNotifs(myUid) {
+function initNotifs(myUid, isAdmin) {
+  if (notifUnsubscribe) { notifUnsubscribe(); notifUnsubscribe = null; }
+  // For admin, also listen to target='admin' (string used by TAs when sending reports)
+  var targets = isAdmin ? [myUid, 'admin', 'all'] : [myUid, 'all'];
   notifUnsubscribe = db.collection('notifikasi')
-    .where('target', 'in', [myUid, 'all'])
+    .where('target', 'in', targets)
     .orderBy('createdAt', 'desc')
     .limit(50)
-    .onSnapshot(snap => {
-      let count = 0;
-      snap.forEach(d => { if (!d.data().isRead) count++; });
+    .onSnapshot(function(snap) {
+      var count = 0;
+      snap.forEach(function(d) { if (!d.data().isRead) count++; });
       // Update bell dots
-      const dot = document.getElementById('bellDot');
-      const cnt = document.getElementById('bellCount');
+      var dot = document.getElementById('bellDot');
+      var cnt = document.getElementById('bellCount');
       if (dot) dot.classList.toggle('show', count > 0);
       if (cnt) { cnt.textContent = count; cnt.classList.toggle('show', count > 0); }
       // Update nav badge
-      document.querySelectorAll('.nav-badge').forEach(b => {
+      document.querySelectorAll('.nav-badge').forEach(function(b) {
         b.textContent = count; b.classList.toggle('show', count > 0);
       });
-    }, err => console.warn('Notif err:', err));
+    }, function(err) { console.warn('Notif listener error:', err); });
 }
 
 async function markRead(notifId) {
@@ -401,14 +523,17 @@ async function markRead(notifId) {
 }
 
 async function markAllRead(myUid) {
+  if (!currentUser) return;
   try {
-    const snap = await db.collection('notifikasi')
-      .where('target', 'in', [myUid, 'all'])
+    var isAdmin = currentUser.role === 'admin';
+    var targets = isAdmin ? [myUid, 'admin', 'all'] : [myUid, 'all'];
+    var snap = await db.collection('notifikasi')
+      .where('target', 'in', targets)
       .where('isRead', '==', false)
       .get();
-    const batch = db.batch();
-    snap.forEach(d => batch.update(d.ref, { isRead: true }));
-    await batch.commit();
+    var batch = db.batch();
+    snap.forEach(function(d) { batch.update(d.ref, { isRead: true }); });
+    if (snap.size > 0) await batch.commit();
     showToast('Semua notifikasi dibaca', 'success');
     loadNotifPage();
   } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
@@ -417,31 +542,31 @@ async function markAllRead(myUid) {
 function openNotifModal() { loadNotifPage(); openModal('notifModal'); }
 
 function renderNotifs(snap) {
-  const el = document.getElementById('notifModalBody');
+  var el = document.getElementById('notifModalBody');
   if (!el) return;
   if (snap.empty) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🔔</div><h4>Belum Ada Notifikasi</h4><p>Notifikasi terbaru muncul di sini</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDD14</div><h4>Belum Ada Notifikasi</h4><p>Notifikasi terbaru muncul di sini</p></div>';
     return;
   }
-  let h = '';
-  snap.forEach(d => {
-    const n = d.data();
-    const ur = !n.isRead;
-    const judul = (n.judul || '').toLowerCase();
-    let icon = '📢', bg = 'var(--purple-bg)';
-    if (judul.includes('disetujui') || judul.includes('akun')) { icon = '✅'; bg = 'var(--green-bg)'; }
-    else if (judul.includes('ditolak')) { icon = '❌'; bg = 'var(--red-light)'; }
-    else if (judul.includes('laporan baru')) { icon = '📋'; bg = 'var(--blue-bg)'; }
-    else if (judul.includes('pengumuman')) { icon = '📢'; bg = 'var(--purple-bg)'; }
+  var h = '';
+  snap.forEach(function(d) {
+    var n = d.data();
+    var ur = !n.isRead;
+    var judul = (n.judul || '').toLowerCase();
+    var icon = '\uD83D\uDCE2', bg = 'var(--purple-bg)';
+    if (judul.indexOf('disetujui') >= 0 || judul.indexOf('akun') >= 0) { icon = '\u2705'; bg = 'var(--green-bg)'; }
+    else if (judul.indexOf('ditolak') >= 0) { icon = '\u274C'; bg = 'var(--red-light)'; }
+    else if (judul.indexOf('laporan baru') >= 0) { icon = '\uD83D\uDCCB'; bg = 'var(--blue-bg)'; }
+    else if (judul.indexOf('pengumuman') >= 0) { icon = '\uD83D\uDCE2'; bg = 'var(--purple-bg)'; }
 
-    h += `<div class="notif-item ${ur ? 'unread' : ''}" onclick="markRead('${d.id}')">
-      <div class="notif-ic" style="background:${bg}">${icon}</div>
-      <div class="notif-body">
-        <div class="nb-title">${esc(n.judul || '')}</div>
-        <div class="nb-msg">${esc(n.pesan || '')}</div>
-        <span class="nb-time">${timeAgo(n.createdAt)}</span>
-      </div>
-    </div>`;
+    h += '<div class="notif-item ' + (ur ? 'unread' : '') + '" onclick="markRead(\'' + d.id + '\')">' +
+      '<div class="notif-ic" style="background:' + bg + '">' + icon + '</div>' +
+      '<div class="notif-body">' +
+        '<div class="nb-title">' + esc(n.judul || '') + '</div>' +
+        '<div class="nb-msg">' + esc(n.pesan || '') + '</div>' +
+        '<span class="nb-time">' + timeAgo(n.createdAt) + '</span>' +
+      '</div>' +
+    '</div>';
   });
   el.innerHTML = h;
 }
@@ -450,74 +575,141 @@ async function loadNotifPage() {
   if (!currentUser) return;
   openModal('notifModal');
   try {
-    const snap = await db.collection('notifikasi')
-      .where('target', 'in', [currentUser.uid, 'all'])
+    var isAdmin = currentUser.role === 'admin';
+    var targets = isAdmin ? [currentUser.uid, 'admin', 'all'] : [currentUser.uid, 'all'];
+    var snap = await db.collection('notifikasi')
+      .where('target', 'in', targets)
       .orderBy('createdAt', 'desc')
       .limit(50)
       .get();
     renderNotifs(snap);
   } catch (e) {
-    const el = document.getElementById('notifModalBody');
+    var el = document.getElementById('notifModalBody');
     if (el) el.innerHTML = '<div class="empty-state"><h4>Gagal memuat</h4></div>';
   }
 }
 
 // ============================================================
-// TA MODULE
+// TA MODULE (Real-Time)
 // ============================================================
 
-// --- Dashboard ---
+// --- Render TA Dashboard from cached data ---
+function renderTADashboard() {
+  var total = cachedTAReports.length;
+  var pending = 0, approved = 0, rejected = 0;
+  cachedTAReports.forEach(function(item) {
+    if (item.data.status === 'pending') pending++;
+    else if (item.data.status === 'approved') approved++;
+    else if (item.data.status === 'rejected') rejected++;
+  });
+
+  $s('s_total', total);
+  $s('s_pending', pending);
+  $s('s_approved', approved);
+  $s('s_rejected', rejected);
+
+  // Recent 5 reports
+  var container = document.getElementById('recentList');
+  if (!container) return;
+
+  if (!cachedTAReports.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+    return;
+  }
+
+  var h = '';
+  var limit = Math.min(5, cachedTAReports.length);
+  for (var i = 0; i < limit; i++) {
+    h += renderReportCard(cachedTAReports[i].data, cachedTAReports[i].id);
+  }
+  container.innerHTML = h;
+}
+
+// --- Render Riwayat from cached data (with period filter) ---
+function renderRiwayat() {
+  var periodEl = document.getElementById('fPeriod');
+  var period = periodEl ? periodEl.value : 'all';
+  var filtered = filterByPeriod(cachedTAReports, period);
+
+  // Stats for filtered data
+  var ap = 0, pe = 0;
+  filtered.forEach(function(item) {
+    if (item.data.status === 'approved') ap++;
+    else if (item.data.status === 'pending') pe++;
+  });
+  $s('f_total', filtered.length);
+  $s('f_approved', ap);
+  $s('f_pending', pe);
+
+  var container = document.getElementById('riwayatList');
+  if (!container) return;
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4><p>Belum ada laporan untuk periode ini</p></div>';
+    return;
+  }
+
+  var h = '';
+  filtered.forEach(function(item) {
+    h += renderReportCard(item.data, item.id);
+  });
+  container.innerHTML = h;
+}
+
+// Fallback: load data once (used if real-time not active)
 async function loadTADashboard() {
   if (!currentUser) return;
-  const uid = currentUser.uid;
+  // If realtime is active, just re-render
+  if (taReportUnsub) { renderTADashboard(); return; }
+  var uid = currentUser.uid;
   try {
-    const [total, pending, approved, rejected] = await Promise.all([
-      db.collection('laporan').where('userId', '==', uid).get(),
-      db.collection('laporan').where('userId', '==', uid).where('status', '==', 'pending').get(),
-      db.collection('laporan').where('userId', '==', uid).where('status', '==', 'approved').get(),
-      db.collection('laporan').where('userId', '==', uid).where('status', '==', 'rejected').get()
-    ]);
+    var total = await db.collection('laporan').where('userId', '==', uid).get();
+    var pending = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'pending').get();
+    var approved = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'approved').get();
+    var rejected = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'rejected').get();
 
     $s('s_total', total.size);
     $s('s_pending', pending.size);
     $s('s_approved', approved.size);
     $s('s_rejected', rejected.size);
 
-    // Recent reports as cards
-    const snap = await db.collection('laporan').where('userId', '==', uid).orderBy('createdAt', 'desc').limit(5).get();
-    const container = document.getElementById('recentList');
+    var snap = await db.collection('laporan').where('userId', '==', uid).orderBy('createdAt', 'desc').limit(5).get();
+    var container = document.getElementById('recentList');
     if (!container) return;
 
     if (snap.empty) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
       return;
     }
 
-    let h = '';
-    snap.forEach(d => { h += renderReportCard(d.data(), d.id); });
+    var h = '';
+    snap.forEach(function(d) { h += renderReportCard(d.data(), d.id); });
     container.innerHTML = h;
   } catch (e) {
     console.error('loadTADashboard error:', e);
     showToast('Gagal memuat dashboard', 'error');
+    var container = document.getElementById('recentList');
+    if (container) container.innerHTML = '<div class="empty-state"><h4>Gagal memuat data</h4></div>';
   }
 }
 
 function renderReportCard(r, id) {
-  const statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
-  const statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
-  const fotoCount = r.fotoUrl ? (Array.isArray(r.fotoUrl) ? r.fotoUrl.length : 1) : 0;
-  const iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
+  var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
+  var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+  var fotoCount = r.fotoUrl ? (Array.isArray(r.fotoUrl) ? r.fotoUrl.length : 1) : 0;
+  var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
 
-  return `<div class="report-item" onclick="viewReport('${id}')">
-    <div class="ri-icon" style="background:${iconBg}">📄</div>
-    <div class="ri-body">
-      <div class="ri-title">${esc(r.judul)}</div>
-      <div class="ri-sub">${esc(r.type || 'Harian')} &middot; ${formatDate(r.tanggal)}</div>
-      <div class="ri-meta">
-        ${fotoCount > 0 ? '📷 ' + fotoCount + ' foto &middot; ' : ''}<span class="status status-${statusClass}">${statusText}</span>
-      </div>
-    </div>
-  </div>`;
+  return '<div class="report-item" onclick="viewReport(\'' + id + '\')">' +
+    '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
+    '<div class="ri-body">' +
+      '<div class="ri-title">' + esc(r.judul) + '</div>' +
+      '<div class="ri-sub">' + esc(r.type || 'Harian') + ' &middot; ' + formatDate(r.tanggal) + '</div>' +
+      '<div class="ri-meta">' +
+        (fotoCount > 0 ? '\uD83D\uDCF7 ' + fotoCount + ' foto &middot; ' : '') +
+        '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
 }
 
 // --- Profil ---
@@ -529,9 +721,9 @@ async function loadProfil() {
   $sv('pWilayah', currentUser.wilayah || '');
   $sv('pNohp', currentUser.nohp || '');
   $sv('pAlamat', currentUser.alamat || '');
-  const g = document.getElementById('pPhotoGrid');
+  var g = document.getElementById('pPhotoGrid');
   if (g && currentUser.photo) {
-    g.innerHTML = `<div class="photo-thumb"><img src="${currentUser.photo}"></div>`;
+    g.innerHTML = '<div class="photo-thumb"><img src="' + currentUser.photo + '"></div>';
   } else if (g) {
     g.innerHTML = '';
   }
@@ -539,20 +731,22 @@ async function loadProfil() {
 }
 
 async function saveProfil() {
-  const nama = $v('pNama'), nip = $v('pNip'), jabatan = $v('pJabatan');
-  const wilayah = $v('pWilayah'), nohp = $v('pNohp'), alamat = $v('pAlamat');
+  var nama = $v('pNama'), nip = $v('pNip'), jabatan = $v('pJabatan');
+  var wilayah = $v('pWilayah'), nohp = $v('pNohp'), alamat = $v('pAlamat');
   if (!nama || !jabatan) return showToast('Nama dan Jabatan wajib diisi', 'error');
   showLoading();
   try {
-    const photo = uploadedPhotos[0] || currentUser.photo || '';
+    var photo = uploadedPhotos[0] || currentUser.photo || '';
     await db.collection('users').doc(currentUser.uid).update({
-      nama, nip, jabatan, wilayah, nohp, alamat, photo
+      nama: nama, nip: nip, jabatan: jabatan, wilayah: wilayah, nohp: nohp, alamat: alamat, photo: photo
     });
     currentUser.nama = nama;
     currentUser.jabatan = jabatan;
+    currentUser.photo = photo;
     document.getElementById('profileName').textContent = nama;
     document.getElementById('profileAvatar').textContent = nama.charAt(0).toUpperCase();
-    document.getElementById('welcomeName').textContent = 'Halo, ' + nama + '!';
+    var welcomeEl = document.getElementById('welcomeName');
+    if (welcomeEl) welcomeEl.textContent = 'Halo, ' + nama + '!';
     hideLoading();
     showToast('Profil berhasil disimpan!', 'success');
     switchPage('home');
@@ -566,18 +760,18 @@ async function saveProfil() {
 async function loadBuatForm() {
   if (!currentUser) return;
   uploadedPhotos = [];
-  const g = document.getElementById('rPhotoGrid');
+  var g = document.getElementById('rPhotoGrid');
   if (g) g.innerHTML = '';
   $sv('rNama', currentUser.nama || currentUser.email || '');
   $sv('rTanggal', new Date().toISOString().split('T')[0]);
 }
 
 async function submitReport() {
-  const nama = currentUser.nama || $v('rNama');
-  const judul = $v('rJudul');
-  const isi = $v('rIsi');
-  const type = document.getElementById('rType').value;
-  const tanggal = $v('rTanggal');
+  var nama = currentUser.nama || $v('rNama');
+  var judul = $v('rJudul');
+  var isi = $v('rIsi');
+  var type = document.getElementById('rType').value;
+  var tanggal = $v('rTanggal');
 
   if (!judul || !isi || !tanggal) {
     return showToast('Judul, isi, dan tanggal wajib diisi', 'error');
@@ -585,7 +779,7 @@ async function submitReport() {
 
   showLoading();
   try {
-    const fotoUrl = uploadedPhotos.length > 0 ? uploadedPhotos : [];
+    var fotoUrl = uploadedPhotos.length > 0 ? uploadedPhotos.slice() : [];
 
     await db.collection('laporan').add({
       userId: currentUser.uid,
@@ -600,7 +794,7 @@ async function submitReport() {
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 
-    // Notify admin
+    // Notify admin (target = 'admin' string)
     await db.collection('notifikasi').add({
       judul: 'Laporan Baru',
       pesan: nama + ' mengirim laporan: "' + judul + '"',
@@ -619,6 +813,7 @@ async function submitReport() {
     uploadedPhotos = [];
     document.getElementById('rPhotoGrid').innerHTML = '';
 
+    // Switch to riwayat - real-time listener will auto-update data
     switchPage('riwayat');
   } catch (e) {
     hideLoading();
@@ -627,28 +822,29 @@ async function submitReport() {
   }
 }
 
-// --- Riwayat Laporan ---
+// --- Riwayat Laporan (fallback if no realtime) ---
 async function loadLaporan() {
   if (!currentUser) return;
-  const period = document.getElementById('fPeriod') ? document.getElementById('fPeriod').value : 'all';
-  const container = document.getElementById('riwayatList');
+  // If realtime is active, just re-render with current filter
+  if (taReportUnsub) { renderRiwayat(); return; }
+  var period = document.getElementById('fPeriod') ? document.getElementById('fPeriod').value : 'all';
+  var container = document.getElementById('riwayatList');
   if (!container) return;
   container.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
 
   try {
-    let q = db.collection('laporan');
+    var q = db.collection('laporan');
     if (currentUser.role !== 'admin') q = q.where('userId', '==', currentUser.uid);
     if (period !== 'all') {
-      const { start, end } = getDateRange(period);
-      q = q.where('createdAt', '>=', start).where('createdAt', '<', end);
+      var range = getDateRange(period);
+      q = q.where('createdAt', '>=', range.start).where('createdAt', '<', range.end);
     }
     q = q.orderBy('createdAt', 'desc').limit(100);
-    const snap = await q.get();
+    var snap = await q.get();
 
-    // Stats
-    let ap = 0, pe = 0;
-    snap.forEach(d => {
-      const s = d.data().status;
+    var ap = 0, pe = 0;
+    snap.forEach(function(d) {
+      var s = d.data().status;
       if (s === 'approved') ap++;
       else if (s === 'pending') pe++;
     });
@@ -657,12 +853,12 @@ async function loadLaporan() {
     $s('f_pending', pe);
 
     if (!snap.size) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan</h4><p>Belum ada laporan untuk periode ini</p></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4><p>Belum ada laporan untuk periode ini</p></div>';
       return;
     }
 
-    let h = '';
-    snap.forEach(d => { h += renderReportCard(d.data(), d.id); });
+    var h = '';
+    snap.forEach(function(d) { h += renderReportCard(d.data(), d.id); });
     container.innerHTML = h;
   } catch (e) {
     console.error('loadLaporan error:', e);
@@ -672,47 +868,54 @@ async function loadLaporan() {
 
 // --- View Report Detail ---
 async function viewReport(id) {
-  const body = document.getElementById('reportModalBody');
+  var body = document.getElementById('reportModalBody');
   if (!body) return;
   body.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
   openModal('reportModal');
 
   try {
-    const doc = await db.collection('laporan').doc(id).get();
+    var doc = await db.collection('laporan').doc(id).get();
     if (!doc.exists) { body.innerHTML = '<p style="text-align:center;color:var(--text3)">Tidak ditemukan</p>'; return; }
-    const r = doc.data();
-    const statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
-    const statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+    var r = doc.data();
+    var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
+    var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
 
     // Photos
-    let photos = '';
-    const fotoList = r.fotoUrl ? (Array.isArray(r.fotoUrl) ? r.fotoUrl : [r.fotoUrl]) : [];
+    var photos = '';
+    var fotoList = r.fotoUrl ? (Array.isArray(r.fotoUrl) ? r.fotoUrl : [r.fotoUrl]) : [];
     if (fotoList.length > 0) {
-      photos = `<div class="detail-field mt-16"><label>Foto Kegiatan (${fotoList.length})</label>
-        <div class="photo-grid">${fotoList.map(f => `<div class="photo-thumb"><img src="${f}" onclick="openLightbox('${f}')" loading="lazy"></div>`).join('')}</div></div>`;
+      var photoItems = '';
+      fotoList.forEach(function(f) {
+        photoItems += '<div class="photo-thumb"><img src="' + f + '" onclick="openLightbox(\'' + f + '\')" loading="lazy"></div>';
+      });
+      photos = '<div class="detail-field mt-16"><label>Foto Kegiatan (' + fotoList.length + ')</label><div class="photo-grid">' + photoItems + '</div></div>';
     }
 
-    body.innerHTML = `
-      <div class="flex justify-between items-center mb-16">
-        <span class="status status-${statusClass}" style="font-size:12px;padding:5px 14px">${statusText}</span>
-        <span class="text-xs text-muted">${formatDateTime(r.createdAt)}</span>
-      </div>
-      <div class="detail-field"><label>Tenaga Ahli</label><p><b>${esc(r.nama || '-')}</b></p></div>
-      <div class="detail-field"><label>Tanggal</label><p>${formatDate(r.tanggal)}</p></div>
-      <div class="detail-field"><label>Tipe</label><p>${esc(r.type || 'Harian')}</p></div>
-      <div class="detail-field"><label>Judul</label><p><b>${esc(r.judul)}</b></p></div>
-      <div class="detail-field"><label>Isi Laporan</label><div class="detail-isi">${esc(r.isi)}</div></div>
-      ${r.catatanAdmin ? `<div class="detail-field"><label>Catatan Admin</label><div class="detail-note">${esc(r.catatanAdmin)}</div></div>` : ''}
-      ${photos}
-      ${currentUser && currentUser.role === 'admin' && r.status === 'pending' ? `
-        <div class="mt-16" style="padding-top:16px;border-top:1px solid var(--border)">
-          <div class="detail-field"><label>Catatan (opsional)</label><textarea id="adminNote" class="form-input" rows="3" placeholder="Catatan admin..."></textarea></div>
-          <div class="flex gap-8">
-            <button class="btn btn-green btn-block" onclick="approveReport('${id}')">✓ Setujui</button>
-            <button class="btn btn-red btn-block" onclick="rejectReport('${id}')">✗ Tolak</button>
-          </div>
-        </div>` : ''}
-    `;
+    // Admin action buttons (only for admin on pending reports)
+    var adminActions = '';
+    if (currentUser && currentUser.role === 'admin' && r.status === 'pending') {
+      adminActions = '<div class="mt-16" style="padding-top:16px;border-top:1px solid var(--border)">' +
+        '<div class="detail-field"><label>Catatan (opsional)</label><textarea id="adminNote" class="form-input" rows="3" placeholder="Catatan admin..."></textarea></div>' +
+        '<div class="flex gap-8">' +
+          '<button class="btn btn-green btn-block" onclick="approveReport(\'' + id + '\')">\u2713 Setujui</button>' +
+          '<button class="btn btn-red btn-block" onclick="rejectReport(\'' + id + '\')">\u2717 Tolak</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    body.innerHTML =
+      '<div class="flex justify-between items-center mb-16">' +
+        '<span class="status status-' + statusClass + '" style="font-size:12px;padding:5px 14px">' + statusText + '</span>' +
+        '<span class="text-xs text-muted">' + formatDateTime(r.createdAt) + '</span>' +
+      '</div>' +
+      '<div class="detail-field"><label>Tenaga Ahli</label><p><b>' + esc(r.nama || '-') + '</b></p></div>' +
+      '<div class="detail-field"><label>Tanggal</label><p>' + formatDate(r.tanggal) + '</p></div>' +
+      '<div class="detail-field"><label>Tipe</label><p>' + esc(r.type || 'Harian') + '</p></div>' +
+      '<div class="detail-field"><label>Judul</label><p><b>' + esc(r.judul) + '</b></p></div>' +
+      '<div class="detail-field"><label>Isi Laporan</label><div class="detail-isi">' + esc(r.isi) + '</div></div>' +
+      (r.catatanAdmin ? '<div class="detail-field"><label>Catatan Admin</label><div class="detail-note">' + esc(r.catatanAdmin) + '</div></div>' : '') +
+      photos +
+      adminActions;
   } catch (e) {
     console.error('viewReport error:', e);
     body.innerHTML = '<p style="text-align:center;color:var(--text3)">Gagal memuat</p>';
@@ -720,21 +923,159 @@ async function viewReport(id) {
 }
 
 // ============================================================
-// ADMIN MODULE
+// ADMIN MODULE (Real-Time)
 // ============================================================
 
+// --- Render Admin Dashboard Stats from cached data ---
+function renderAdminDashStats() {
+  var totalTA = 0, pendUser = 0, totalRep = 0, pendRep = 0, okRep = 0, monthRep = 0;
+  var now = new Date();
+  var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  // User stats from cached users
+  cachedAdminUsers.forEach(function(item) {
+    totalTA++;
+    if (item.data.status === 'pending') pendUser++;
+  });
+
+  // Report stats from cached reports
+  cachedAdminReports.forEach(function(item) {
+    totalRep++;
+    if (item.data.status === 'pending') pendRep++;
+    else if (item.data.status === 'approved') okRep++;
+    // Monthly count
+    if (item.data.createdAt) {
+      var ts = item.data.createdAt.toDate ? item.data.createdAt.toDate() : new Date(item.data.createdAt);
+      if (ts >= monthStart && ts < monthEnd) monthRep++;
+    }
+  });
+
+  $s('a_totalTA', totalTA);
+  $s('a_pendUser', pendUser);
+  $s('a_totalRep', totalRep);
+  $s('a_pendRep', pendRep);
+  $s('a_okRep', okRep);
+  $s('a_monthRep', monthRep);
+}
+
+// --- Render Admin Pending Users from cached data ---
+function renderAdminDashUsers() {
+  var el = document.getElementById('pendUsers');
+  if (!el) return;
+
+  var pendingUsers = cachedAdminUsers.filter(function(item) {
+    return item.data.status === 'pending';
+  });
+
+  if (!pendingUsers.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">\u2705</div><h4>Tidak ada permintaan baru</h4></div>';
+    return;
+  }
+
+  var h = '';
+  pendingUsers.forEach(function(item) {
+    var u = item.data;
+    h += '<div class="pend-user">' +
+      '<div class="pu-info">' +
+        '<div class="pu-name">' + esc(u.nama || u.email) + '</div>' +
+        '<div class="pu-email">' + esc(u.email) + ' &middot; ' + timeAgo(u.createdAt) + '</div>' +
+      '</div>' +
+      '<div class="pu-actions">' +
+        '<button class="btn btn-green btn-sm" onclick="approveUser(\'' + item.id + '\')">Setujui</button>' +
+        '<button class="btn btn-red btn-sm" onclick="rejectUser(\'' + item.id + '\')">Tolak</button>' +
+      '</div>' +
+    '</div>';
+  });
+  el.innerHTML = h;
+}
+
+// --- Render Admin Reports from cached data (with period filter) ---
+function renderAdminReportList() {
+  var periodEl = document.getElementById('aPeriod');
+  var period = periodEl ? periodEl.value : 'all';
+  var filtered = filterByPeriod(cachedAdminReports, period);
+
+  var container = document.getElementById('adminRepList');
+  if (!container) return;
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4></div>';
+    return;
+  }
+
+  var h = '';
+  filtered.forEach(function(item) {
+    var r = item.data;
+    var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
+    var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+    var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
+
+    var quickBtns = '';
+    if (r.status === 'pending' && currentUser && currentUser.role === 'admin') {
+      quickBtns = ' &middot; <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
+    }
+
+    h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')">' +
+      '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
+      '<div class="ri-body">' +
+        '<div class="ri-title">' + esc(r.judul) + '</div>' +
+        '<div class="ri-sub">' + esc(r.nama || '-') + ' &middot; ' + formatDate(r.tanggal) + '</div>' +
+        '<div class="ri-meta">' +
+          '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
+          quickBtns +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  });
+  container.innerHTML = h;
+}
+
+// --- Render Admin User List from cached data ---
+function renderAdminUserList() {
+  var container = document.getElementById('adminUserList');
+  if (!container) return;
+
+  if (!cachedAdminUsers.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDC65</div><h4>Belum ada Tenaga Ahli</h4></div>';
+    return;
+  }
+
+  var h = '';
+  cachedAdminUsers.forEach(function(item) {
+    var u = item.data;
+    var statusClass = u.status === 'active' ? 'active' : u.status === 'rejected' ? 'rejected' : 'pending';
+    var statusText = u.status === 'active' ? 'Aktif' : u.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+
+    var actions = '<span class="status status-' + statusClass + '">' + statusText + '</span>';
+    if (u.status === 'pending') {
+      actions += ' <button class="btn btn-green btn-sm" onclick="approveUser(\'' + item.id + '\')">\u2713</button>' +
+                 ' <button class="btn btn-red btn-sm" onclick="rejectUser(\'' + item.id + '\')">\u2717</button>';
+    }
+
+    h += '<div class="pend-user">' +
+      '<div class="pu-info">' +
+        '<div class="pu-name">' + esc(u.nama || '-') + '</div>' +
+        '<div class="pu-email">' + esc(u.email) + ' &middot; ' + (u.jabatan || '-') + '</div>' +
+      '</div>' +
+      '<div class="pu-actions">' + actions + '</div>' +
+    '</div>';
+  });
+  container.innerHTML = h;
+}
+
+// --- Fallback: load admin data once (used if realtime not active) ---
 async function loadAdminDash() {
   if (!currentUser) return;
+  if (adminReportUnsub && adminUserUnsub) { renderAdminDashStats(); renderAdminDashUsers(); return; }
   try {
-    const [taSnap, pendSnap, totalSnap, pRepSnap, aRepSnap] = await Promise.all([
-      db.collection('users').where('role', '==', 'ta').where('status', '==', 'active').get(),
-      db.collection('users').where('status', '==', 'pending').get(),
-      db.collection('laporan').get(),
-      db.collection('laporan').where('status', '==', 'pending').get(),
-      db.collection('laporan').where('status', '==', 'approved').get()
-    ]);
-    const { start: ms, end: me } = getDateRange('monthly');
-    const mRep = await db.collection('laporan').where('createdAt', '>=', ms).where('createdAt', '<', me).get();
+    var taSnap = await db.collection('users').where('role', '==', 'ta').where('status', '==', 'active').get();
+    var pendSnap = await db.collection('users').where('status', '==', 'pending').get();
+    var totalSnap = await db.collection('laporan').get();
+    var pRepSnap = await db.collection('laporan').where('status', '==', 'pending').get();
+    var aRepSnap = await db.collection('laporan').where('status', '==', 'approved').get();
+    var range = getDateRange('monthly');
+    var mRep = await db.collection('laporan').where('createdAt', '>=', range.start).where('createdAt', '<', range.end).get();
 
     $s('a_totalTA', taSnap.size);
     $s('a_pendUser', pendSnap.size);
@@ -743,27 +1084,30 @@ async function loadAdminDash() {
     $s('a_okRep', aRepSnap.size);
     $s('a_monthRep', mRep.size);
 
-    const el = document.getElementById('pendUsers');
+    var el = document.getElementById('pendUsers');
     if (!pendSnap.size) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><h4>Tidak ada permintaan baru</h4></div>';
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">\u2705</div><h4>Tidak ada permintaan baru</h4></div>';
     } else {
-      let h = '';
-      pendSnap.forEach(d => {
-        const u = d.data();
-        h += `<div class="pend-user">
-          <div class="pu-info">
-            <div class="pu-name">${esc(u.nama || u.email)}</div>
-            <div class="pu-email">${esc(u.email)} &middot; ${timeAgo(u.createdAt)}</div>
-          </div>
-          <div class="pu-actions">
-            <button class="btn btn-green btn-sm" onclick="approveUser('${d.id}')">Setujui</button>
-            <button class="btn btn-red btn-sm" onclick="rejectUser('${d.id}')">Tolak</button>
-          </div>
-        </div>`;
+      var h = '';
+      pendSnap.forEach(function(d) {
+        var u = d.data();
+        h += '<div class="pend-user">' +
+          '<div class="pu-info">' +
+            '<div class="pu-name">' + esc(u.nama || u.email) + '</div>' +
+            '<div class="pu-email">' + esc(u.email) + ' &middot; ' + timeAgo(u.createdAt) + '</div>' +
+          '</div>' +
+          '<div class="pu-actions">' +
+            '<button class="btn btn-green btn-sm" onclick="approveUser(\'' + d.id + '\')">Setujui</button>' +
+            '<button class="btn btn-red btn-sm" onclick="rejectUser(\'' + d.id + '\')">Tolak</button>' +
+          '</div>' +
+        '</div>';
       });
       el.innerHTML = h;
     }
-  } catch (e) { console.error('loadAdminDash error:', e); }
+  } catch (e) {
+    console.error('loadAdminDash error:', e);
+    showToast('Gagal memuat dashboard', 'error');
+  }
 }
 
 async function approveUser(uid) {
@@ -771,8 +1115,8 @@ async function approveUser(uid) {
   showLoading();
   try {
     await db.collection('users').doc(uid).update({ status: 'active' });
-    const uDoc = await db.collection('users').doc(uid).get();
-    const name = uDoc.exists ? (uDoc.data().nama || uDoc.data().email) : 'User';
+    var uDoc = await db.collection('users').doc(uid).get();
+    var name = uDoc.exists ? (uDoc.data().nama || uDoc.data().email) : 'User';
     await db.collection('notifikasi').add({
       judul: 'Akun Disetujui',
       pesan: 'Selamat ' + name + '! Akun Anda telah disetujui.',
@@ -783,18 +1127,18 @@ async function approveUser(uid) {
     });
     hideLoading();
     showToast('User disetujui', 'success');
-    loadAdminDash();
+    // Real-time listener will auto-update the UI
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
 async function rejectUser(uid) {
-  const reason = prompt('Alasan penolakan (opsional):');
+  var reason = prompt('Alasan penolakan (opsional):');
   if (reason === null) return;
   showLoading();
   try {
     await db.collection('users').doc(uid).update({ status: 'rejected' });
-    const uDoc = await db.collection('users').doc(uid).get();
-    const name = uDoc.exists ? (uDoc.data().nama || uDoc.data().email) : 'User';
+    var uDoc = await db.collection('users').doc(uid).get();
+    var name = uDoc.exists ? (uDoc.data().nama || uDoc.data().email) : 'User';
     await db.collection('notifikasi').add({
       judul: 'Akun Ditolak',
       pesan: 'Maaf ' + name + ', akun Anda ditolak.' + (reason ? ' Alasan: ' + reason : ''),
@@ -805,48 +1149,51 @@ async function rejectUser(uid) {
     });
     hideLoading();
     showToast('User ditolak', 'success');
-    loadAdminDash();
+    // Real-time listener will auto-update the UI
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
+// Fallback: load admin reports once
 async function loadAdminReports() {
-  const period = document.getElementById('aPeriod') ? document.getElementById('aPeriod').value : 'all';
-  const container = document.getElementById('adminRepList');
+  if (!currentUser) return;
+  if (adminReportUnsub) { renderAdminReportList(); return; }
+  var period = document.getElementById('aPeriod') ? document.getElementById('aPeriod').value : 'all';
+  var container = document.getElementById('adminRepList');
   if (!container) return;
   container.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
 
   try {
-    let q = db.collection('laporan');
+    var q = db.collection('laporan');
     if (period !== 'all') {
-      const { start, end } = getDateRange(period);
-      q = q.where('createdAt', '>=', start).where('createdAt', '<', end);
+      var range = getDateRange(period);
+      q = q.where('createdAt', '>=', range.start).where('createdAt', '<', range.end);
     }
     q = q.orderBy('createdAt', 'desc').limit(100);
-    const snap = await q.get();
+    var snap = await q.get();
 
     if (!snap.size) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan</h4></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4></div>';
       return;
     }
 
-    let h = '';
-    snap.forEach(d => {
-      const r = d.data();
-      const statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
-      const statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
-      const iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
+    var h = '';
+    snap.forEach(function(d) {
+      var r = d.data();
+      var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : 'pending';
+      var statusText = r.status === 'approved' ? 'Disetujui' : r.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+      var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : 'var(--orange-bg)';
 
-      h += `<div class="report-item" onclick="viewReport('${d.id}')">
-        <div class="ri-icon" style="background:${iconBg}">📄</div>
-        <div class="ri-body">
-          <div class="ri-title">${esc(r.judul)}</div>
-          <div class="ri-sub">${esc(r.nama || '-')} &middot; ${formatDate(r.tanggal)}</div>
-          <div class="ri-meta">
-            <span class="status status-${statusClass}">${statusText}</span>
-            ${r.status === 'pending' ? ` &middot; <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove('${d.id}')">✓</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject('${d.id}')">✗</button>` : ''}
-          </div>
-        </div>
-      </div>`;
+      h += '<div class="report-item" onclick="viewReport(\'' + d.id + '\')">' +
+        '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
+        '<div class="ri-body">' +
+          '<div class="ri-title">' + esc(r.judul) + '</div>' +
+          '<div class="ri-sub">' + esc(r.nama || '-') + ' &middot; ' + formatDate(r.tanggal) + '</div>' +
+          '<div class="ri-meta">' +
+            '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
+            (r.status === 'pending' ? ' &middot; <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + d.id + '\')">\u2713</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + d.id + '\')">\u2717</button>' : '') +
+          '</div>' +
+        '</div>' +
+      '</div>';
     });
     container.innerHTML = h;
   } catch (e) {
@@ -855,37 +1202,37 @@ async function loadAdminReports() {
   }
 }
 
+// Fallback: load admin users once
 async function loadAdminUsers() {
-  const container = document.getElementById('adminUserList');
+  if (!currentUser) return;
+  if (adminUserUnsub) { renderAdminUserList(); return; }
+  var container = document.getElementById('adminUserList');
   if (!container) return;
   container.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
 
   try {
-    const snap = await db.collection('users').where('role', '==', 'ta').orderBy('createdAt', 'desc').get();
+    var snap = await db.collection('users').where('role', '==', 'ta').orderBy('createdAt', 'desc').get();
     if (!snap.size) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><h4>Belum ada Tenaga Ahli</h4></div>';
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDC65</div><h4>Belum ada Tenaga Ahli</h4></div>';
       return;
     }
 
-    let h = '';
-    snap.forEach(d => {
-      const u = d.data();
-      const statusClass = u.status === 'active' ? 'active' : u.status === 'rejected' ? 'rejected' : 'pending';
-      const statusText = u.status === 'active' ? 'Aktif' : u.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+    var h = '';
+    snap.forEach(function(d) {
+      var u = d.data();
+      var statusClass = u.status === 'active' ? 'active' : u.status === 'rejected' ? 'rejected' : 'pending';
+      var statusText = u.status === 'active' ? 'Aktif' : u.status === 'rejected' ? 'Ditolak' : 'Menunggu';
 
-      h += `<div class="pend-user">
-        <div class="pu-info">
-          <div class="pu-name">${esc(u.nama || '-')}</div>
-          <div class="pu-email">${esc(u.email)} &middot; ${u.jabatan || '-'}</div>
-        </div>
-        <div class="pu-actions">
-          <span class="status status-${statusClass}">${statusText}</span>
-          ${u.status === 'pending' ? `
-            <button class="btn btn-green btn-sm" onclick="approveUser('${d.id}')">✓</button>
-            <button class="btn btn-red btn-sm" onclick="rejectUser('${d.id}')">✗</button>
-          ` : ''}
-        </div>
-      </div>`;
+      h += '<div class="pend-user">' +
+        '<div class="pu-info">' +
+          '<div class="pu-name">' + esc(u.nama || '-') + '</div>' +
+          '<div class="pu-email">' + esc(u.email) + ' &middot; ' + (u.jabatan || '-') + '</div>' +
+        '</div>' +
+        '<div class="pu-actions">' +
+          '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
+          (u.status === 'pending' ? ' <button class="btn btn-green btn-sm" onclick="approveUser(\'' + d.id + '\')">\u2713</button> <button class="btn btn-red btn-sm" onclick="rejectUser(\'' + d.id + '\')">\u2717</button>' : '') +
+        '</div>' +
+      '</div>';
     });
     container.innerHTML = h;
   } catch (e) {
@@ -899,12 +1246,12 @@ async function approveReport(id) {
   if (!confirm('Setujui laporan ini?')) return;
   showLoading();
   try {
-    const note = document.getElementById('adminNote') ? $v('adminNote') : '';
-    const upd = { status: 'approved' };
+    var note = document.getElementById('adminNote') ? $v('adminNote') : '';
+    var upd = { status: 'approved' };
     if (note) upd.catatanAdmin = note;
     await db.collection('laporan').doc(id).update(upd);
-    const doc = await db.collection('laporan').doc(id).get();
-    const r = doc.data();
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
     await db.collection('notifikasi').add({
       judul: 'Laporan Disetujui',
       pesan: 'Laporan "' + r.judul + '" telah disetujui.' + (note ? ' Catatan: ' + note : ''),
@@ -916,20 +1263,19 @@ async function approveReport(id) {
     hideLoading();
     showToast('Laporan disetujui', 'success');
     closeModal('reportModal');
-    if (typeof loadAdminReports === 'function') loadAdminReports();
-    if (typeof loadAdminDash === 'function') loadAdminDash();
+    // Real-time listener will auto-update
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
 async function rejectReport(id) {
-  const note = document.getElementById('adminNote') ? $v('adminNote') : '';
-  const reason = note || prompt('Alasan penolakan:');
+  var note = document.getElementById('adminNote') ? $v('adminNote') : '';
+  var reason = note || prompt('Alasan penolakan:');
   if (!reason) return showToast('Masukkan alasan', 'error');
   showLoading();
   try {
     await db.collection('laporan').doc(id).update({ status: 'rejected', catatanAdmin: reason });
-    const doc = await db.collection('laporan').doc(id).get();
-    const r = doc.data();
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
     await db.collection('notifikasi').add({
       judul: 'Laporan Ditolak',
       pesan: 'Laporan "' + r.judul + '" ditolak. Catatan: ' + reason,
@@ -941,8 +1287,7 @@ async function rejectReport(id) {
     hideLoading();
     showToast('Laporan ditolak', 'success');
     closeModal('reportModal');
-    if (typeof loadAdminReports === 'function') loadAdminReports();
-    if (typeof loadAdminDash === 'function') loadAdminDash();
+    // Real-time listener will auto-update
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
@@ -950,8 +1295,8 @@ async function quickApprove(id) {
   showLoading();
   try {
     await db.collection('laporan').doc(id).update({ status: 'approved' });
-    const doc = await db.collection('laporan').doc(id).get();
-    const r = doc.data();
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
     await db.collection('notifikasi').add({
       judul: 'Laporan Disetujui',
       pesan: 'Laporan "' + r.judul + '" telah disetujui.',
@@ -962,19 +1307,18 @@ async function quickApprove(id) {
     });
     hideLoading();
     showToast('Disetujui', 'success');
-    loadAdminReports();
-    loadAdminDash();
+    // Real-time listener will auto-update
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
 async function quickReject(id) {
-  const reason = prompt('Alasan penolakan:');
+  var reason = prompt('Alasan penolakan:');
   if (!reason) return;
   showLoading();
   try {
     await db.collection('laporan').doc(id).update({ status: 'rejected', catatanAdmin: reason });
-    const doc = await db.collection('laporan').doc(id).get();
-    const r = doc.data();
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
     await db.collection('notifikasi').add({
       judul: 'Laporan Ditolak',
       pesan: 'Laporan "' + r.judul + '" ditolak. Catatan: ' + reason,
@@ -985,20 +1329,19 @@ async function quickReject(id) {
     });
     hideLoading();
     showToast('Ditolak', 'success');
-    loadAdminReports();
-    loadAdminDash();
+    // Real-time listener will auto-update
   } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
 }
 
 // --- Broadcast ---
 async function sendBroadcast() {
-  const title = $v('bcTitle'), msg = $v('bcMsg');
+  var title = $v('bcTitle'), msg = $v('bcMsg');
   if (!title || !msg) return showToast('Judul dan pesan wajib diisi', 'error');
   showLoading();
   try {
-    const snap = await db.collection('users').where('role', '==', 'ta').where('status', '==', 'active').get();
-    const batch = db.batch();
-    snap.forEach(d => {
+    var snap = await db.collection('users').where('role', '==', 'ta').where('status', '==', 'active').get();
+    var batch = db.batch();
+    snap.forEach(function(d) {
       batch.add(db.collection('notifikasi'), {
         judul: title,
         pesan: msg,
