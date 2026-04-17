@@ -169,9 +169,10 @@
 // =============================================
 const ADMIN_PIN = 'pdimeranti2025';
 
-function doAdminLogin() {
+async function doAdminLogin() {
   const key = document.getElementById('adminKey').value.trim();
   const errEl = document.getElementById('loginErr');
+  const btn = document.querySelector('#adminLogin .btn');
 
   if (!key) {
     errEl.textContent = 'Masukkan kunci admin terlebih dahulu';
@@ -179,21 +180,40 @@ function doAdminLogin() {
     return;
   }
 
-  if (key === ADMIN_PIN) {
-    errEl.style.display = 'none';
-    // Set currentUser manually tanpa Firebase Auth
+  if (key !== ADMIN_PIN) {
+    errEl.textContent = 'Kunci admin salah! Coba lagi.';
+    errEl.style.display = 'block';
+    document.getElementById('adminKey').value = '';
+    document.getElementById('adminKey').focus();
+    return;
+  }
+
+  // PIN benar, login ke Firebase Anonymous supaya Firestore bisa diakses
+  errEl.style.display = 'none';
+  btn.textContent = 'Menghubungkan...';
+  btn.disabled = true;
+
+  try {
+    const result = await auth.signInAnonymously();
     currentUser = {
-      uid: 'admin',
+      uid: result.user.uid,
       nama: 'Admin',
       role: 'admin',
       status: 'active'
     };
     enterAdmin();
-  } else {
-    errEl.textContent = 'Kunci admin salah! Coba lagi.';
+  } catch(e) {
+    console.error('Firebase login error:', e);
+    if (e.code === 'auth/operation-not-allowed') {
+      errEl.innerHTML = 'Anonymous Auth belum diaktifkan. Buka Firebase Console &rarr; Authentication &rarr; Sign-in method &rarr; Aktifkan <b>Anonymous</b>';
+    } else if (e.code === 'auth/too-many-requests') {
+      errEl.textContent = 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.';
+    } else {
+      errEl.textContent = 'Gagal koneksi: ' + (e.message || 'Unknown error');
+    }
     errEl.style.display = 'block';
-    document.getElementById('adminKey').value = '';
-    document.getElementById('adminKey').focus();
+    btn.textContent = 'MASUK';
+    btn.disabled = false;
   }
 }
 
@@ -208,21 +228,24 @@ function enterAdmin() {
 function doAdminLogout() {
   if (confirm('Keluar dari panel admin?')) {
     currentUser = null;
+    auth.signOut().catch(function(){});
     document.getElementById('adminApp').style.display = 'none';
     document.getElementById('adminLogin').style.display = 'flex';
     document.getElementById('adminKey').value = '';
+    var btn = document.querySelector('#adminLogin .btn');
+    if (btn) { btn.textContent = 'MASUK'; btn.disabled = false; }
     document.getElementById('adminKey').focus();
   }
 }
 
 // Auto-focus PIN input
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('adminKey').focus();
 });
 
 function searchTA(q) {
   q = q.toLowerCase();
-  document.querySelectorAll('#aTaTable tr').forEach(r => { r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'; });
+  document.querySelectorAll('#aTaTable tr').forEach(function(r) { r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none'; });
 }
 </script>
 </body>
