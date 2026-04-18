@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Admin - PDI TA App</title>
   <link rel="stylesheet" href="css/style.css?v=6">
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
   <style>
 /* ============================================
    PDI TA App — Modern Minimalist Design v3
@@ -128,7 +129,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 .nav-item.active { color: var(--red); }
 .nav-item.nav-center { margin-top: -20px; width: 52px; height: 52px; background: var(--red); border-radius: 50%; color: #fff !important; box-shadow: 0 4px 16px rgba(196,22,28,.35); padding: 0; gap: 0; }
 .nav-item.nav-center .nav-icon { font-size: 24px; }
-.nav-item.nav-center span:last-child { display: none; }
+.nav-item.nav-center span { display: none; }
 .nav-badge { position: absolute; top: 0; right: 4px; min-width: 16px; height: 16px; background: var(--red); color: #fff; font-size: 9px; font-weight: 700; border-radius: 8px; display: none; align-items: center; justify-content: center; padding: 0 4px; }
 .nav-badge.show { display: flex; }
 
@@ -314,7 +315,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
     </div>
     <div class="header-right">
       <button class="bell-btn" onclick="openAdminNotifModal()">
-        🔔
+        <i class="ri-notification-3-line"></i>
         <span class="notif-dot" id="bellDot"></span>
         <span class="notif-count" id="bellCount">0</span>
       </button>
@@ -356,8 +357,8 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
       </div>
 
       <div class="quick-actions no-print">
-        <button class="btn btn-outline" onclick="openBroadcastModal()">📢 Broadcast</button>
-        <button class="btn btn-outline" onclick="switchPage('a_laporan')">📋 Laporan</button>
+        <button class="btn btn-outline" onclick="openBroadcastModal()"><i class="ri-megaphone-line" style="font-size:16px"></i> Broadcast</button>
+        <button class="btn btn-outline" onclick="switchPage('a_laporan')"><i class="ri-file-text-line" style="font-size:16px"></i> Laporan</button>
       </div>
 
       <div class="card">
@@ -365,7 +366,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
           <h3>Permintaan Pendaftaran</h3>
         </div>
         <div id="pendUsers">
-          <div class="empty-state"><div class="empty-icon">✅</div><h4>Tidak ada permintaan baru</h4></div>
+          <div class="empty-state"><i class="ri-checkbox-circle-line empty-icon"></i><h4>Tidak ada permintaan baru</h4></div>
         </div>
       </div>
     </div>
@@ -390,7 +391,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
             <h3 id="dailyTitle">Laporan Harian</h3>
           </div>
           <div id="dailyRepList">
-            <div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan harian</h4></div>
+            <div class="empty-state"><i class="ri-file-list-3-line empty-icon"></i><h4>Tidak ada laporan harian</h4></div>
           </div>
         </div>
       </div>
@@ -407,7 +408,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
             <h3 id="monthlyTitle">Laporan Bulanan</h3>
           </div>
           <div id="monthlyRepList">
-            <div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan bulanan</h4></div>
+            <div class="empty-state"><i class="ri-file-list-3-line empty-icon"></i><h4>Tidak ada laporan bulanan</h4></div>
           </div>
         </div>
       </div>
@@ -442,7 +443,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
           <h3>Daftar Tenaga Ahli</h3>
         </div>
         <div id="adminUserList">
-          <div class="empty-state"><div class="empty-icon">👥</div><h4>Belum ada Tenaga Ahli</h4></div>
+          <div class="empty-state"><i class="ri-group-line empty-icon"></i><h4>Belum ada Tenaga Ahli</h4></div>
         </div>
       </div>
     </div>
@@ -452,15 +453,15 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
   <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
     <button class="nav-item active" data-page="a_home" onclick="switchPage('a_home')">
-      <span class="nav-icon">🏠</span>
+      <i class="ri-dashboard-3-line nav-icon"></i>
       <span>Beranda</span>
     </button>
     <button class="nav-item" data-page="a_laporan" onclick="switchPage('a_laporan')">
-      <span class="nav-icon">📋</span>
+      <i class="ri-file-text-line nav-icon"></i>
       <span>Laporan</span>
     </button>
     <button class="nav-item" data-page="a_user" onclick="switchPage('a_user')">
-      <span class="nav-icon">👥</span>
+      <i class="ri-group-line nav-icon"></i>
       <span>User</span>
     </button>
   </nav>
@@ -483,7 +484,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-top">
-      <h3>📢 Broadcast Pesan</h3>
+      <h3><i class="ri-megaphone-line" style="font-size:16px"></i> Broadcast Pesan</h3>
       <button class="modal-close" onclick="closeModal('bcModal')">&times;</button>
     </div>
     <div class="modal-content">
@@ -512,7 +513,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
       <button class="modal-close" onclick="closeModal('notifModal')">&times;</button>
     </div>
     <div class="modal-content" id="notifModalBody" style="padding:0">
-      <div class="empty-state"><div class="empty-icon">🔔</div><h4>Belum Ada Notifikasi</h4></div>
+      <div class="empty-state"><i class="ri-notification-off-line empty-icon"></i><h4>Belum Ada Notifikasi</h4></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline btn-sm" onclick="markAllRead(currentUser.uid)">Tandai Semua Dibaca</button>
@@ -523,7 +524,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=16"></script>
+<script src="js/app.js?v=17"></script>
 <script>
 const ADMIN_PIN = 'pdimeranti2025';
 
