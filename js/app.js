@@ -805,6 +805,38 @@ function initNotifs(myUid, isAdmin) {
 }
 
 async function markRead(notifId) {
+  // Langsung update UI: hapus class unread, ubah background ke dasar
+  var item = document.querySelector('.notif-item[onclick*="' + notifId + '"]');
+  if (item) {
+    item.classList.remove('unread');
+    item.style.background = '';
+    // Hilangkan dot merah unread via ::after
+    item.classList.add('read-done');
+  }
+  // Kurangi angka notif di bell & badge
+  var cnt = document.getElementById('bellCount');
+  var dot = document.getElementById('bellDot');
+  if (cnt && cnt.classList.contains('show')) {
+    var num = parseInt(cnt.textContent) - 1;
+    if (num <= 0) {
+      num = 0;
+      cnt.classList.remove('show');
+      if (dot) dot.classList.remove('show');
+    }
+    cnt.textContent = num;
+  }
+  document.querySelectorAll('.nav-badge').forEach(function(b) {
+    if (b.classList.contains('show')) {
+      var num = parseInt(b.textContent) - 1;
+      if (num <= 0) { num = 0; b.classList.remove('show'); }
+      b.textContent = num;
+    }
+  });
+  // Update judul tab
+  var totalUnread = 0;
+  document.querySelectorAll('.notif-item.unread').forEach(function() { totalUnread++; });
+  document.title = totalUnread > 0 ? '(' + totalUnread + ') PDI TA App' : 'PDI TA App';
+  // Update ke Firestore
   try { await db.collection('notifikasi').doc(notifId).update({ isRead: true }); } catch (e) {}
 }
 
