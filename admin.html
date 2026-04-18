@@ -181,10 +181,11 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 .notif-item > .notif-ic { margin-right: 12px; }
 .notif-item:last-child { border-bottom: none; }
 .notif-item:hover { background: #fafafa; }
-.notif-item.unread { background: rgba(196,22,28,.02); }
-.notif-item.unread::after { content: ''; width: 6px; height: 6px; background: var(--red); border-radius: 50%; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); }
+.notif-item.unread { background: rgba(196,22,28,.08); border-left: 3px solid var(--red); transition: all .3s ease; }
+.notif-item.read-done { background: var(--white) !important; border-left: 3px solid transparent; transition: all .3s ease; }
+.notif-item.read-done::after { display: none !important; }
 .notif-ic { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; background: var(--bg); }
-.notif-item.unread .notif-ic { background: var(--red-light); }
+.notif-item.unread .notif-ic { background: rgba(196,22,28,.12); }
 .notif-body { flex: 1; min-width: 0; }
 .notif-body .nb-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
 .notif-item.unread .nb-title { font-weight: 700; }
@@ -524,7 +525,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=17"></script>
+<script src="js/app.js?v=18"></script>
 <script>
 const ADMIN_PIN = 'pdimeranti2025';
 
