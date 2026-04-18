@@ -127,8 +127,8 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 .nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 12px; border: none; background: none; cursor: pointer; color: var(--text3); font-size: 10px; font-weight: 500; transition: color .2s; -webkit-tap-highlight-color: transparent; position: relative; }
 .nav-item .nav-icon { font-size: 22px; line-height: 1; }
 .nav-item.active { color: var(--red); }
-.nav-item.nav-center { margin-top: -20px; width: 52px; height: 52px; background: var(--red); border-radius: 50%; color: #fff !important; box-shadow: 0 4px 16px rgba(196,22,28,.35); padding: 0; gap: 0; }
-.nav-item.nav-center .nav-icon { font-size: 24px; }
+.nav-item.nav-center { margin-top: -22px; width: 58px; height: 58px; background: linear-gradient(135deg, var(--red), var(--red-dark)); border-radius: 50%; color: #fff !important; box-shadow: 0 6px 20px rgba(196,22,28,.4); padding: 0; gap: 0; }
+.nav-item.nav-center .nav-icon { font-size: 26px; }
 .nav-item.nav-center span { display: none; }
 .nav-badge { position: absolute; top: 0; right: 4px; min-width: 16px; height: 16px; background: var(--red); color: #fff; font-size: 9px; font-weight: 700; border-radius: 8px; display: none; align-items: center; justify-content: center; padding: 0 4px; }
 .nav-badge.show { display: flex; }
@@ -181,10 +181,11 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 .notif-item > .notif-ic { margin-right: 12px; }
 .notif-item:last-child { border-bottom: none; }
 .notif-item:hover { background: #fafafa; }
-.notif-item.unread { background: rgba(196,22,28,.02); }
-.notif-item.unread::after { content: ''; width: 6px; height: 6px; background: var(--red); border-radius: 50%; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); }
+.notif-item.unread { background: rgba(196,22,28,.08); border-left: 3px solid var(--red); transition: all .3s ease; }
+.notif-item.read-done { background: var(--white) !important; border-left: 3px solid transparent; transition: all .3s ease; }
+.notif-item.read-done::after { display: none !important; }
 .notif-ic { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; background: var(--bg); }
-.notif-item.unread .notif-ic { background: var(--red-light); }
+.notif-item.unread .notif-ic { background: rgba(196,22,28,.12); }
 .notif-body { flex: 1; min-width: 0; }
 .notif-body .nb-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
 .notif-item.unread .nb-title { font-weight: 700; }
@@ -491,7 +492,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
       <span>Beranda</span>
     </button>
     <button class="nav-item nav-center" data-page="buat" onclick="switchPage('buat')">
-      <i class="ri-add-line nav-icon"></i>
+      <i class="ri-edit-2-line nav-icon"></i>
       <span>Buat</span>
     </button>
     <button class="nav-item" data-page="riwayat" onclick="switchPage('riwayat')">
@@ -537,7 +538,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=17"></script>
+<script src="js/app.js?v=18"></script>
 <script>
 document.addEventListener('DOMContentLoaded', async () => {
   try {
