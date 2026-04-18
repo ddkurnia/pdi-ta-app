@@ -1,561 +1,2463 @@
-<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#ffffff">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <link rel="manifest" href="manifest.json">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>PDI TA App</title>
-  <link rel="stylesheet" href="css/style.css?v=6">
-  <style>
-/* ============================================
-   PDI TA App — Modern Minimalist Design v3
-   ============================================ */
-:root {
-  --red: #c4161c;
-  --red-dark: #9e1217;
-  --red-light: #f5e6e7;
-  --bg: #f5f5f5;
-  --white: #ffffff;
-  --text: #1a1a1a;
-  --text2: #6b7280;
-  --text3: #9ca3af;
-  --border: #e8e8e8;
-  --green: #16a34a;
-  --green-bg: #f0fdf4;
-  --orange: #ea580c;
-  --orange-bg: #fff7ed;
-  --blue: #2563eb;
-  --blue-bg: #eff6ff;
-  --purple: #7c3aed;
-  --purple-bg: #f5f3ff;
-  --radius: 14px;
-  --radius-sm: 10px;
-  --radius-xs: 8px;
-  --shadow: 0 1px 3px rgba(0,0,0,.06);
-  --shadow-md: 0 4px 12px rgba(0,0,0,.08);
-  --shadow-lg: 0 8px 24px rgba(0,0,0,.12);
-  --nav-h: 60px;
+// ============================================================
+// PDI TA App - All-in-One JavaScript (Real-Time Edition v6)
+// ============================================================
+
+// --- Firebase Config ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBucw8o7otTVB97wR0mMJIo2LNkS_oSB5Y",
+  authDomain: "pdi-ta-app.firebaseapp.com",
+  projectId: "pdi-ta-app",
+  storageBucket: "pdi-ta-app.firebasestorage.app",
+  messagingSenderId: "477558489412",
+  appId: "1:477558489412:web:b0898e239f2145a5299711"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// --- Cloudinary Config ---
+const CLOUD_NAME = "ddnv9ffai";
+const UPLOAD_PRESET = "pdi-ta-upload";
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
+
+// --- Global State ---
+let currentUser = null;
+let uploadedPhotos = [];
+let notifUnsubscribe = null;
+let lastNotifCount = 0;
+let lastNotifIds = new Set();
+
+// Real-time cached data
+let taReportUnsub = null;
+let adminReportUnsub = null;
+let adminUserUnsub = null;
+let cachedTAReports = [];
+let cachedAdminReports = [];
+let cachedAdminUsers = [];
+
+// Selected reports for Word export
+let selectedReportIds = new Set();
+
+// ============================================================
+// UTILITIES
+// ============================================================
+function $v(id) { const e = document.getElementById(id); return e ? e.value.trim() : ''; }
+function $s(id, val) { const e = document.getElementById(id); if (e) e.textContent = val; }
+function $sv(id, val) { const e = document.getElementById(id); if (e) e.value = val; }
+
+function esc(t) {
+  if (!t) return '';
+  const d = document.createElement('div');
+  d.textContent = t;
+  return d.innerHTML;
 }
 
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-html { font-size: 16px; -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
-body { font-family: -apple-system, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; min-height: 100vh; overflow-x: hidden; -webkit-font-smoothing: antialiased; }
-a { color: var(--red); text-decoration: none; }
-img { max-width: 100%; height: auto; display: block; }
-button, input, select, textarea { font-family: inherit; font-size: inherit; }
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-@keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
-
-.login-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--white); padding: 24px; }
-.login-box { width: 100%; max-width: 380px; text-align: center; animation: slideUp .4s ease; }
-.login-logo { width: 64px; height: 64px; background: var(--red); border-radius: 18px; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; color: #fff; font-weight: 800; font-size: 20px; letter-spacing: 1px; }
-.login-box h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-.login-box .subtitle { font-size: 13px; color: var(--text2); margin-bottom: 32px; }
-.auth-toggle { display: flex; background: var(--bg); border-radius: var(--radius-sm); padding: 3px; margin-bottom: 24px; }
-.auth-toggle button { flex: 1; padding: 10px; border: none; background: none; border-radius: var(--radius-xs); font-size: 13px; font-weight: 600; color: var(--text2); cursor: pointer; transition: all .2s; }
-.auth-toggle button.active { background: var(--white); color: var(--text); box-shadow: var(--shadow); }
-
-.form-group { margin-bottom: 16px; }
-.form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
-.form-input { width: 100%; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 15px; color: var(--text); background: var(--white); transition: border-color .2s, box-shadow .2s; outline: none; -webkit-appearance: none; appearance: none; }
-.form-input:focus { border-color: var(--red); box-shadow: 0 0 0 3px rgba(196,22,28,.1); }
-.form-input::placeholder { color: var(--text3); }
-select.form-input { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239ca3af' viewBox='0 0 16 16'%3E%3Cpath d='M8 11.5L2.5 5.5h11z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
-textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
-.form-row { display: flex; }
-.form-row .form-group { flex: 1; margin-right: 12px; }
-.form-row .form-group:last-child { margin-right: 0; }
-
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 24px; border: none; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600; cursor: pointer; transition: all .15s; line-height: 1.4; }
-.btn:active { transform: scale(.97); }
-.btn:disabled { opacity: .5; cursor: not-allowed; transform: none !important; }
-.btn-red { background: var(--red); color: #fff; }
-.btn-red:hover { background: var(--red-dark); }
-.btn-green { background: var(--green); color: #fff; }
-.btn-green:hover { background: #15803d; }
-.btn-outline { background: var(--white); color: var(--text); border: 1.5px solid var(--border); }
-.btn-outline:hover { border-color: var(--red); color: var(--red); }
-.btn-ghost { background: none; color: var(--text2); }
-.btn-ghost:hover { background: var(--bg); }
-.btn-block { width: 100%; }
-.btn-sm { padding: 8px 16px; font-size: 12px; }
-.btn-lg { padding: 14px 28px; font-size: 15px; }
-
-.spinner { width: 28px; height: 28px; border: 3px solid var(--border); border-top-color: var(--red); border-radius: 50%; animation: spin .7s linear infinite; }
-.spinner-center { display: flex; align-items: center; justify-content: center; padding: 40px; }
-.loading-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(255,255,255,.75); display: none; align-items: center; justify-content: center; z-index: 9000; }
-.loading-overlay.show { display: flex; }
-
-.toast-area { position: fixed; top: 16px; left: 16px; right: 16px; z-index: 8000; display: flex; flex-direction: column; pointer-events: none; }
-.toast-area > .toast-msg { margin-bottom: 8px; }
-.toast-msg { display: flex; align-items: center; padding: 12px 16px; background: var(--text); color: #fff; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; box-shadow: var(--shadow-lg); animation: slideUp .3s ease; pointer-events: auto; }
-.toast-msg > span:first-child { margin-right: 10px; }
-.toast-msg.toast-success { background: var(--green); }
-.toast-msg.toast-error { background: var(--red); }
-.toast-msg.toast-warning { background: var(--orange); }
-.toast-msg.toast-info { background: var(--blue); }
-
-.app-shell { display: flex; flex-direction: column; min-height: 100vh; }
-.app-header { background: var(--white); padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; flex-shrink: 0; }
-.header-left { display: flex; align-items: center; }
-.header-left h2 { font-size: 17px; font-weight: 700; }
-.header-right { display: flex; align-items: center; }
-.bell-btn { position: relative; width: 40px; height: 40px; border: none; background: none; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-xs); color: var(--text); margin-right: 4px; }
-.bell-btn:hover { background: var(--bg); }
-.notif-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; background: var(--red); border-radius: 50%; border: 2px solid var(--white); display: none; }
-.notif-dot.show { display: block; animation: pulse 2s infinite; }
-.notif-count { position: absolute; top: 2px; right: 2px; min-width: 16px; height: 16px; background: var(--red); color: #fff; font-size: 9px; font-weight: 700; border-radius: 8px; display: none; align-items: center; justify-content: center; padding: 0 4px; border: 2px solid var(--white); }
-.notif-count.show { display: flex; }
-.hamburger { width: 40px; height: 40px; border: none; background: none; cursor: pointer; font-size: 22px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-xs); color: var(--text); }
-.hamburger:hover { background: var(--bg); }
-
-.app-content { flex: 1; padding: 16px 16px 80px; max-width: 600px; width: 100%; margin: 0 auto; }
-.tab-page { display: none; animation: fadeIn .2s ease; }
-.tab-page.active { display: block; }
-
-.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; height: 60px; padding-top: 4px; background: var(--white); border-top: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-around; z-index: 200; }
-.nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 12px; border: none; background: none; cursor: pointer; color: var(--text3); font-size: 10px; font-weight: 500; transition: color .2s; -webkit-tap-highlight-color: transparent; position: relative; }
-.nav-item .nav-icon { font-size: 22px; line-height: 1; }
-.nav-item.active { color: var(--red); }
-.nav-item.nav-center { margin-top: -20px; width: 52px; height: 52px; background: var(--red); border-radius: 50%; color: #fff !important; box-shadow: 0 4px 16px rgba(196,22,28,.35); padding: 0; gap: 0; }
-.nav-item.nav-center .nav-icon { font-size: 24px; }
-.nav-item.nav-center span:last-child { display: none; }
-.nav-badge { position: absolute; top: 0; right: 4px; min-width: 16px; height: 16px; background: var(--red); color: #fff; font-size: 9px; font-weight: 700; border-radius: 8px; display: none; align-items: center; justify-content: center; padding: 0 4px; }
-.nav-badge.show { display: flex; }
-
-.stat-grid { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 20px; }
-.stat-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
-.stat-card { background: var(--white); border-radius: var(--radius-sm); padding: 16px; border: 1px solid var(--border); margin-bottom: 10px; }
-.stat-card .stat-num { font-size: 24px; font-weight: 800; line-height: 1.1; }
-.stat-card .stat-label { font-size: 11px; color: var(--text2); margin-top: 2px; }
-.stat-card .stat-icon { font-size: 16px; float: right; margin-top: -4px; opacity: .3; }
-
-.card { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 12px; overflow: hidden; }
-.card-header { padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
-.card-header h3 { font-size: 14px; font-weight: 700; }
-.card-body { padding: 16px; }
-
-.report-item { display: flex; padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; }
-.report-item > .ri-icon { margin-right: 12px; }
-.report-item:last-child { border-bottom: none; }
-.report-item:hover { background: #fafafa; }
-.report-item .ri-icon { width: 42px; height: 42px; border-radius: var(--radius-xs); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; background: var(--red-light); }
-.report-item .ri-body { flex: 1; min-width: 0; }
-.report-item .ri-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.report-item .ri-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
-.report-item .ri-meta { font-size: 11px; color: var(--text3); margin-top: 4px; }
-
-.status { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
-.status-pending { background: var(--orange-bg); color: var(--orange); }
-.status-approved { background: var(--green-bg); color: var(--green); }
-.status-rejected { background: var(--red-light); color: var(--red); }
-.status-revisi { background: var(--blue-bg); color: var(--blue); }
-.status-active { background: var(--green-bg); color: var(--green); }
-.status-wait { background: var(--orange-bg); color: var(--orange); }
-
-.empty-state { text-align: center; padding: 40px 20px; color: var(--text3); }
-.empty-state .empty-icon { font-size: 48px; margin-bottom: 12px; opacity: .4; }
-.empty-state h4 { font-size: 15px; color: var(--text2); margin-bottom: 4px; }
-.empty-state p { font-size: 13px; }
-
-.pend-user { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
-.pend-user:last-child { border-bottom: none; }
-.pend-user .pu-info { flex: 1; min-width: 0; }
-.pend-user .pu-name { font-size: 14px; font-weight: 600; }
-.pend-user .pu-email { font-size: 12px; color: var(--text2); }
-.pend-user .pu-actions { display: flex; flex-shrink: 0; margin-left: 12px; }
-.pend-user .pu-actions .btn { margin-left: 6px; }
-.pend-user .pu-actions .btn:first-child { margin-left: 0; }
-
-.notif-item { display: flex; padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .15s; position: relative; }
-.notif-item > .notif-ic { margin-right: 12px; }
-.notif-item:last-child { border-bottom: none; }
-.notif-item:hover { background: #fafafa; }
-.notif-item.unread { background: rgba(196,22,28,.02); }
-.notif-item.unread::after { content: ''; width: 6px; height: 6px; background: var(--red); border-radius: 50%; position: absolute; left: 8px; top: 50%; transform: translateY(-50%); }
-.notif-ic { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; background: var(--bg); }
-.notif-item.unread .notif-ic { background: var(--red-light); }
-.notif-body { flex: 1; min-width: 0; }
-.notif-body .nb-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
-.notif-item.unread .nb-title { font-weight: 700; }
-.notif-body .nb-msg { font-size: 12px; color: var(--text2); line-height: 1.4; }
-.notif-body .nb-time { font-size: 11px; color: var(--text3); margin-top: 4px; display: block; }
-
-.upload-box { border: 2px dashed var(--border); border-radius: var(--radius-sm); padding: 28px 16px; text-align: center; cursor: pointer; transition: border-color .2s, background .2s; background: var(--bg); }
-.upload-box:hover { border-color: var(--red); background: var(--red-light); }
-.upload-box .ub-icon { font-size: 32px; opacity: .3; margin-bottom: 8px; }
-.upload-box p { font-size: 13px; color: var(--text2); }
-.upload-box small { font-size: 11px; color: var(--text3); }
-.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); margin-top: 12px; }
-.photo-grid > .photo-thumb { margin-right: 8px; margin-bottom: 8px; }
-.photo-thumb { position: relative; border-radius: var(--radius-xs); overflow: hidden; width: 90px; height: 90px; box-shadow: var(--shadow); float: left; margin-right: 8px; margin-bottom: 8px; }
-.photo-thumb img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
-.photo-thumb .rm-btn { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; background: rgba(0,0,0,.6); color: #fff; border: none; border-radius: 50%; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; }
-.photo-thumb:hover .rm-btn { opacity: 1; }
-
-.modal-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: rgba(0,0,0,.4); z-index: 1000; opacity: 0; visibility: hidden; transition: all .25s; display: flex; align-items: flex-end; justify-content: center; }
-.modal-overlay.show { opacity: 1; visibility: visible; }
-.modal-sheet { background: var(--white); border-radius: 20px 20px 0 0; width: 100%; max-height: 90vh; overflow-y: auto; -webkit-overflow-scrolling: touch; transform: translateY(100%); transition: transform .3s ease; }
-.modal-overlay.show .modal-sheet { transform: translateY(0); }
-.modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 10px auto 0; }
-.modal-top { padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; background: var(--white); z-index: 1; border-bottom: 1px solid var(--border); }
-.modal-top h3 { font-size: 16px; font-weight: 700; }
-.modal-close { width: 32px; height: 32px; border: none; background: var(--bg); border-radius: 50%; cursor: pointer; font-size: 18px; color: var(--text2); display: flex; align-items: center; justify-content: center; }
-.modal-close:hover { background: var(--border); }
-.modal-content { padding: 16px 20px 24px; }
-.modal-actions { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; position: sticky; bottom: 0; background: var(--white); }
-.modal-actions .btn { margin-left: 8px; }
-.modal-actions .btn:first-child { margin-left: 0; }
-
-.detail-field { margin-bottom: 14px; }
-.detail-field label { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .5px; display: block; margin-bottom: 4px; }
-.detail-field p { font-size: 14px; line-height: 1.6; }
-.detail-isi { background: var(--bg); padding: 12px 14px; border-radius: var(--radius-xs); font-size: 14px; line-height: 1.7; white-space: pre-wrap; }
-.detail-note { background: var(--orange-bg); padding: 10px 14px; border-radius: var(--radius-xs); font-size: 13px; color: var(--orange); border-left: 3px solid var(--orange); }
-
-.filter-bar { display: flex; margin-bottom: 16px; flex-wrap: wrap; }
-.filter-bar .form-input { flex: 1; min-width: 140px; font-size: 13px; padding: 10px 12px; }
-.filter-bar .btn { margin-left: 8px; }
-.filter-bar .btn:first-child { margin-left: 0; }
-
-.alert-box { display: flex; align-items: center; padding: 14px 16px; background: var(--orange-bg); border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 13px; border-left: 3px solid var(--orange); }
-.alert-box > * { margin-right: 12px; }
-.alert-box > *:last-child { margin-right: 0; }
-
-.welcome-banner { background: linear-gradient(135deg, var(--red), var(--red-dark)); border-radius: var(--radius); padding: 20px; color: #fff; margin-bottom: 20px; }
-.welcome-banner h3 { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
-.welcome-banner p { font-size: 13px; opacity: .85; }
-.quick-actions { display: flex; margin-bottom: 20px; }
-.quick-actions .btn { flex: 1; }
-.quick-actions .btn:first-child { margin-right: 10px; }
-
-.profile-header { text-align: center; padding: 20px; margin-bottom: 16px; }
-.profile-avatar { width: 72px; height: 72px; background: var(--red); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; color: #fff; font-size: 28px; font-weight: 700; }
-.profile-name { font-size: 18px; font-weight: 700; }
-.profile-role { font-size: 13px; color: var(--text2); }
-
-.admin-login-overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; background: var(--bg); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 24px; }
-.admin-login-card { background: var(--white); border-radius: var(--radius); padding: 32px 24px; width: 100%; max-width: 360px; text-align: center; box-shadow: var(--shadow-lg); animation: slideUp .4s ease; }
-
-.print-only { display: none; }
-@media print { .app-header, .bottom-nav, .no-print { display: none !important; } .app-content { padding-bottom: 0; max-width: 100%; } .print-only { display: block; } .card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; } }
-
-@media (min-width: 769px) {
-  .modal-overlay { align-items: center; justify-content: center; padding: 24px; }
-  .modal-sheet { border-radius: var(--radius); max-width: 560px; transform: scale(.95); opacity: 0; transition: transform .2s ease, opacity .2s ease; }
-  .modal-overlay.show .modal-sheet { transform: scale(1); opacity: 1; }
-  .modal-handle { display: none; }
-  .app-content { max-width: 680px; padding: 24px 24px 80px; }
-  .stat-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr 1fr; }
-  .toast-area { left: auto; right: 16px; max-width: 380px; }
-}
-
-.mb-8 { margin-bottom: 8px; }
-.mb-12 { margin-bottom: 12px; }
-.mb-16 { margin-bottom: 16px; }
-.mb-20 { margin-bottom: 20px; }
-.mt-12 { margin-top: 12px; }
-.mt-16 { margin-top: 16px; }
-.gap-8 { margin-left: -4px; margin-right: -4px; }
-.gap-8 > * { margin-left: 4px; margin-right: 4px; }
-.flex { display: flex; }
-.items-center { align-items: center; }
-.justify-between { justify-content: space-between; }
-.flex-1 { flex: 1; }
-.text-sm { font-size: 13px; }
-.text-xs { font-size: 11px; }
-.text-muted { color: var(--text2); }
-.font-bold { font-weight: 700; }
-.w-full { width: 100%; }
-.hidden { display: none !important; }
-.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  </style>
-</head>
-<body>
-
-<div class="app-shell">
-
-  <!-- HEADER -->
-  <header class="app-header">
-    <div class="header-left">
-      <h2 id="pageTitle">Beranda</h2>
-    </div>
-    <div class="header-right">
-      <button class="bell-btn" onclick="openNotifModal()">
-        🔔
-        <span class="notif-dot" id="bellDot"></span>
-        <span class="notif-count" id="bellCount">0</span>
-      </button>
-      <button class="hamburger" onclick="logout()" title="Keluar">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--red)"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      </button>
-    </div>
-  </header>
-
-  <!-- CONTENT -->
-  <div class="app-content">
-
-    <!-- TAB: HOME -->
-    <div id="page_home" class="tab-page">
-      <div class="welcome-banner">
-        <h3 id="welcomeName">Selamat Datang!</h3>
-        <p>Fraksi PDI Perjuangan Kab. Kepulauan Meranti</p>
-      </div>
-
-      <div class="stat-grid" id="homeStats">
-        <div class="stat-card">
-          <div class="stat-num" id="s_total">0</div>
-          <div class="stat-label">Total Laporan</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num" id="s_pending" style="color:var(--orange)">0</div>
-          <div class="stat-label">Menunggu</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num" id="s_approved" style="color:var(--green)">0</div>
-          <div class="stat-label">Diterima</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num" id="s_rejected" style="color:var(--red)">0</div>
-          <div class="stat-label">Ditolak</div>
-        </div>
-      </div>
-
-      <div class="quick-actions no-print">
-        <button class="btn btn-red" onclick="switchPage('buat')">+ Buat Laporan</button>
-        <button class="btn btn-outline" onclick="switchPage('riwayat')">Lihat Semua</button>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <h3>Laporan Terbaru</h3>
-        </div>
-        <div id="recentList">
-          <div class="spinner-center"><div class="spinner"></div></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: BUAT LAPORAN -->
-    <div id="page_buat" class="tab-page">
-      <div class="card">
-        <div class="card-header">
-          <h3>Buat Laporan</h3>
-        </div>
-        <div class="card-body">
-          <div class="form-group">
-            <label>Nama TA</label>
-            <input id="rNama" class="form-input" readonly style="background:var(--bg);color:var(--text2)">
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Tanggal *</label>
-              <input type="date" id="rTanggal" class="form-input">
-            </div>
-            <div class="form-group">
-              <label>Tipe</label>
-              <select id="rType" class="form-input">
-                <option value="Harian">Harian</option>
-                <option value="Mingguan">Mingguan</option>
-                <option value="Bulanan">Bulanan</option>
-                <option value="Khusus">Khusus</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Judul Laporan *</label>
-            <input id="rJudul" class="form-input" placeholder="Judul kegiatan">
-          </div>
-          <div class="form-group">
-            <label>Isi Laporan *</label>
-            <textarea id="rIsi" class="form-input" rows="5" placeholder="Detail kegiatan..."></textarea>
-          </div>
-          <div class="form-group">
-            <label>Foto Kegiatan</label>
-            <input type="file" id="rPhotoInput" accept="image/*" multiple style="display:none" onchange="processFiles(this,'rPhotoGrid')">
-            <div class="upload-box" onclick="document.getElementById('rPhotoInput').click()">
-              <div class="ub-icon">📷</div>
-              <p>Klik untuk upload foto</p>
-              <small>JPG/PNG, maks 5MB</small>
-            </div>
-            <div class="photo-grid" id="rPhotoGrid"></div>
-          </div>
-          <button class="btn btn-red btn-block btn-lg" onclick="submitReport()">Kirim Laporan</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: RIWAYAT LAPORAN -->
-    <div id="page_riwayat" class="tab-page">
-      <div class="filter-bar no-print">
-        <select id="fPeriod" class="form-input" onchange="loadLaporan()">
-          <option value="all" selected>Semua</option>
-          <option value="daily">Hari Ini</option>
-          <option value="monthly">Bulan Ini</option>
-          <option value="yearly">Tahun Ini</option>
-        </select>
-        <button class="btn btn-outline btn-sm" onclick="loadLaporan()">Refresh</button>
-      </div>
-
-      <div class="stat-grid cols-3 mb-12">
-        <div class="stat-card">
-          <div class="stat-num" id="f_total">0</div>
-          <div class="stat-label">Total</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num" id="f_approved" style="color:var(--green)">0</div>
-          <div class="stat-label">Diterima</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-num" id="f_pending" style="color:var(--orange)">0</div>
-          <div class="stat-label">Menunggu</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <h3>Riwayat Laporan</h3>
-        </div>
-        <div id="riwayatList">
-          <div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan</h4><p>Buat laporan pertama Anda</p></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: PROFIL -->
-    <div id="page_profil" class="tab-page">
-      <div class="profile-header">
-        <div class="profile-avatar" id="profileAvatar" style="cursor:pointer;position:relative" onclick="document.getElementById('pPhotoInput').click()">T</div>
-        <div class="profile-name" id="profileName">Tenaga Ahli</div>
-        <div class="profile-role">Tenaga Ahli</div>
-        <input type="file" id="pPhotoInput" accept="image/*" style="display:none" onchange="processAvatarUpload(this)">
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <h3>Edit Profil</h3>
-        </div>
-        <div class="card-body">
-          <div class="form-group">
-            <label>Nama Lengkap *</label>
-            <input id="pNama" class="form-input" placeholder="Nama lengkap">
-          </div>
-          <div class="form-group">
-            <label>NIP</label>
-            <input id="pNip" class="form-input" placeholder="Nomor Induk Pegawai">
-          </div>
-          <div class="form-group">
-            <label>Jabatan / Bidang *</label>
-            <input id="pJabatan" class="form-input" placeholder="Contoh: Tenaga Ahli Hukum">
-          </div>
-          <div class="form-group">
-            <label>Wilayah Kerja</label>
-            <input id="pWilayah" class="form-input" placeholder="Kecamatan...">
-          </div>
-          <div class="form-group">
-            <label>No. HP / WhatsApp</label>
-            <input id="pNohp" class="form-input" placeholder="08xxx">
-          </div>
-          <div class="form-group">
-            <label>Alamat</label>
-            <textarea id="pAlamat" class="form-input" rows="2" placeholder="Alamat lengkap"></textarea>
-          </div>
-          <button class="btn btn-red btn-block btn-lg" onclick="saveProfil()">Simpan Profil</button>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- BOTTOM NAV -->
-  <nav class="bottom-nav">
-    <button class="nav-item active" data-page="home" onclick="switchPage('home')">
-      <span class="nav-icon">🏠</span>
-      <span>Beranda</span>
-    </button>
-    <button class="nav-item nav-center" data-page="buat" onclick="switchPage('buat')">
-      <span class="nav-icon">✏️</span>
-      <span>Buat</span>
-    </button>
-    <button class="nav-item" data-page="riwayat" onclick="switchPage('riwayat')">
-      <span class="nav-icon">📋</span>
-      <span>Riwayat</span>
-    </button>
-    <button class="nav-item" data-page="profil" onclick="switchPage('profil')">
-      <span class="nav-icon">👤</span>
-      <span>Profil</span>
-    </button>
-  </nav>
-</div>
-
-<!-- REPORT DETAIL MODAL -->
-<div class="modal-overlay" id="reportModal" onclick="if(event.target===this)closeModal('reportModal')">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-top">
-      <h3>Detail Laporan</h3>
-      <button class="modal-close" onclick="closeModal('reportModal')">&times;</button>
-    </div>
-    <div class="modal-content" id="reportModalBody"></div>
-  </div>
-</div>
-
-<!-- NOTIFICATION MODAL -->
-<div class="modal-overlay" id="notifModal" onclick="if(event.target===this)closeModal('notifModal')">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-top">
-      <h3>Notifikasi</h3>
-      <button class="modal-close" onclick="closeModal('notifModal')">&times;</button>
-    </div>
-    <div class="modal-content" id="notifModalBody" style="padding:0">
-      <div class="empty-state"><div class="empty-icon">🔔</div><h4>Belum Ada Notifikasi</h4></div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-outline btn-sm" onclick="markAllRead(currentUser.uid)">Tandai Semua Dibaca</button>
-    </div>
-  </div>
-</div>
-
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-<script src="js/app.js?v=16"></script>
-<script>
-document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    showLoading();
-    currentUser = await checkAuth('ta');
-    hideLoading();
-    const nama = currentUser.nama || currentUser.email;
-    document.getElementById('welcomeName').textContent = 'Halo, ' + nama + '!';
-    document.getElementById('profileName').textContent = nama;
-    document.getElementById('profileAvatar').textContent = nama.charAt(0).toUpperCase();
-    // Mark TA as logged in (for reference)
-    localStorage.setItem('pdi_ta_logged_in', 'true');
-    // Init real-time notifications (TA role = false)
-    initNotifs(currentUser.uid, false);
-    // Init FCM for push notifications (background)
-    initFCM();
-    // Init real-time listener for TA reports
-    initTARealtime();
-    // Load home page
-    switchPage('home');
-  } catch(e) {
-    hideLoading();
-    console.error('Init error:', e);
+// v6: Improved formatDate - handles string dates like "2026-04-17" without timezone issues
+function formatDate(d) {
+  if (!d) return '-';
+  if (typeof d === 'string') {
+    var parts = d.split('-');
+    if (parts.length === 3) {
+      var dt = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+    return d;
   }
-});
-window.addEventListener('beforeunload', function() { cleanupListeners(); });
-</script>
-</body>
-</html>
+  var dt = d.toDate ? d.toDate() : new Date(d);
+  return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function formatDateTime(d) {
+  if (!d) return '-';
+  var dt = d.toDate ? d.toDate() : new Date(d);
+  return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function timeAgo(d) {
+  if (!d) return '';
+  var dt = d.toDate ? d.toDate() : new Date(d);
+  var s = Math.floor((Date.now() - dt) / 1000);
+  if (s < 60) return 'Baru saja';
+  if (s < 3600) return Math.floor(s / 60) + ' menit lalu';
+  if (s < 86400) return Math.floor(s / 3600) + ' jam lalu';
+  if (s < 604800) return Math.floor(s / 86400) + ' hari lalu';
+  return formatDate(d);
+}
+
+function getDateRange(p) {
+  var n = new Date();
+  var s, e;
+  if (p === 'daily') {
+    s = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    e = new Date(s.getTime() + 86400000);
+  } else if (p === 'weekly') {
+    s = new Date(n); s.setDate(n.getDate() - 7);
+    e = new Date(n);
+  } else if (p === 'monthly') {
+    s = new Date(n.getFullYear(), n.getMonth(), 1);
+    e = new Date(n.getFullYear(), n.getMonth() + 1, 1);
+  } else if (p === 'yearly') {
+    s = new Date(n.getFullYear(), 0, 1);
+    e = new Date(n.getFullYear() + 1, 0, 1);
+  } else {
+    s = new Date(2020, 0, 1);
+    e = new Date(n.getFullYear() + 1, 0, 1);
+  }
+  return {
+    start: firebase.firestore.Timestamp.fromDate(s),
+    end: firebase.firestore.Timestamp.fromDate(e),
+    startDate: s,
+    endDate: e
+  };
+}
+
+// ============================================================
+// v6: NORMALIZE REPORT DATA
+// Handles inconsistent schema: type/tipe, fotoUrl array/string/"-",
+// tanggal timestamp/string, catatanAdmin string/"-"/""
+// ============================================================
+function normalizeReport(r) {
+  if (!r) return r;
+  // Normalize type field (some docs use "tipe")
+  if (!r.type && r.tipe) r.type = r.tipe;
+  // Normalize fotoUrl: filter out invalid values like "-" or empty strings
+  if (r.fotoUrl) {
+    if (Array.isArray(r.fotoUrl)) {
+      r.fotoUrl = r.fotoUrl.filter(function(f) { return f && typeof f === 'string' && f.indexOf('http') === 0; });
+      if (r.fotoUrl.length === 0) r.fotoUrl = [];
+    } else if (typeof r.fotoUrl === 'string') {
+      if (r.fotoUrl.indexOf('http') === 0) {
+        r.fotoUrl = [r.fotoUrl];
+      } else {
+        r.fotoUrl = [];
+      }
+    }
+  } else {
+    r.fotoUrl = [];
+  }
+  // Normalize catatanAdmin: "-" and "" treated as no note
+  if (r.catatanAdmin === '-' || r.catatanAdmin === '') r.catatanAdmin = '';
+  // Normalize tanggal: ensure it's usable for display
+  // (formatDate already handles both timestamp and string)
+  return r;
+}
+
+// v6: Client-side sort helper for reports
+function sortReportsByDate(reports) {
+  return reports.sort(function(a, b) {
+    var aData = a.data || a;
+    var bData = b.data || b;
+    var ta = aData.createdAt ? (aData.createdAt.toDate ? aData.createdAt.toDate() : new Date(aData.createdAt)) : new Date(0);
+    var tb = bData.createdAt ? (bData.createdAt.toDate ? bData.createdAt.toDate() : new Date(bData.createdAt)) : new Date(0);
+    return tb - ta;
+  });
+}
+
+// Filter cached reports by period (client-side)
+function filterByPeriod(reports, period) {
+  if (period === 'all') return reports;
+  var range = getDateRange(period);
+  return reports.filter(function(r) {
+    var createdAt = r.data ? r.data.createdAt : r.createdAt;
+    if (!createdAt) return false;
+    var ts = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
+    return ts >= range.startDate && ts < range.endDate;
+  });
+}
+
+// ============================================================
+// TOAST
+// ============================================================
+function showToast(msg, type) {
+  type = type || 'info';
+  var c = document.getElementById('toastArea');
+  if (!c) {
+    c = document.createElement('div');
+    c.id = 'toastArea';
+    c.className = 'toast-area';
+    document.body.appendChild(c);
+  }
+  var icons = { success: '\u2713', error: '\u2717', warning: '\u26A0', info: '\u2139' };
+  var t = document.createElement('div');
+  t.className = 'toast-msg toast-' + type;
+  t.innerHTML = '<span>' + (icons[type] || '') + '</span><span>' + msg + '</span>';
+  c.appendChild(t);
+  setTimeout(function() {
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(-10px)';
+    t.style.transition = '.3s';
+    setTimeout(function() { t.remove(); }, 300);
+  }, 3000);
+}
+
+// ============================================================
+// LOADING
+// ============================================================
+function showLoading() {
+  var o = document.getElementById('loadingOverlay');
+  if (!o) {
+    o = document.createElement('div');
+    o.id = 'loadingOverlay';
+    o.className = 'loading-overlay';
+    o.innerHTML = '<div class="spinner"></div>';
+    document.body.appendChild(o);
+  }
+  o.classList.add('show');
+}
+
+function hideLoading() {
+  var o = document.getElementById('loadingOverlay');
+  if (o) o.classList.remove('show');
+}
+
+// ============================================================
+// MODAL
+// ============================================================
+function closeModal(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.remove('show');
+}
+
+function openModal(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.add('show');
+}
+
+function openLightbox(src) {
+  var lb = document.createElement('div');
+  lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:8000;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+  lb.onclick = function() { lb.remove(); };
+  lb.innerHTML = '<img src="' + src + '" style="max-width:92vw;max-height:92vh;border-radius:12px;object-fit:contain;">';
+  document.body.appendChild(lb);
+}
+
+// ============================================================
+// REAL-TIME LISTENERS (v6: No composite orderBy - avoids index errors)
+// ============================================================
+
+// --- Cleanup all listeners ---
+function cleanupListeners() {
+  if (taReportUnsub) { taReportUnsub(); taReportUnsub = null; }
+  if (adminReportUnsub) { adminReportUnsub(); adminReportUnsub = null; }
+  if (adminUserUnsub) { adminUserUnsub(); adminUserUnsub = null; }
+  if (notifUnsubscribe) { notifUnsubscribe(); notifUnsubscribe = null; }
+  cachedTAReports = [];
+  cachedAdminReports = [];
+  cachedAdminUsers = [];
+}
+
+// --- TA Real-time: Listen to own reports ---
+// v6: Removed orderBy to avoid needing composite index (userId + createdAt)
+// Data is sorted client-side after fetch
+function initTARealtime() {
+  if (!currentUser || currentUser.role !== 'ta') return;
+  if (taReportUnsub) taReportUnsub();
+
+  var uid = currentUser.uid;
+  taReportUnsub = db.collection('laporan')
+    .where('userId', '==', uid)
+    .limit(200)
+    .onSnapshot(function(snap) {
+      cachedTAReports = [];
+      snap.forEach(function(d) {
+        var data = normalizeReport(d.data());
+        cachedTAReports.push({ id: d.id, data: data });
+      });
+      // Sort client-side by createdAt desc
+      sortReportsByDate(cachedTAReports);
+      // Auto-update UI
+      renderTADashboard();
+      renderRiwayat();
+    }, function(err) {
+      console.error('TA realtime error:', err);
+      var el1 = document.getElementById('recentList');
+      var el2 = document.getElementById('riwayatList');
+      var emptyHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+      if (el1) el1.innerHTML = emptyHTML;
+      if (el2) el2.innerHTML = emptyHTML;
+
+      // v6: Show helpful error for missing index
+      if (err.code === 'failed-precondition') {
+        showToast('Index Firestore belum dibuat. Lihat console untuk link pembuatan.', 'error');
+        console.error('FIRESTORE INDEX NEEDED. Open this URL to create it:', err.message);
+      } else {
+        showToast('Gagal memuat laporan: ' + (err.message || ''), 'error');
+      }
+    });
+}
+
+// --- Admin Real-time: Listen to all reports ---
+// v6: Single-field orderBy is auto-indexed, no composite needed
+function initAdminReportRealtime() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  if (adminReportUnsub) adminReportUnsub();
+
+  adminReportUnsub = db.collection('laporan')
+    .orderBy('createdAt', 'desc')
+    .limit(200)
+    .onSnapshot(function(snap) {
+      cachedAdminReports = [];
+      snap.forEach(function(d) {
+        var data = normalizeReport(d.data());
+        cachedAdminReports.push({ id: d.id, data: data });
+      });
+      renderAdminDashStats();
+      renderAdminReportList();
+    }, function(err) {
+      console.error('Admin reports realtime error:', err);
+      var el = document.getElementById('adminRepList');
+      if (el) el.innerHTML = '<div class="empty-state"><h4>Gagal memuat laporan</h4><p>' + esc(err.message || 'Terjadi kesalahan') + '</p></div>';
+      showToast('Gagal memuat laporan admin', 'error');
+    });
+}
+
+// --- Admin Real-time: Listen to all TA users ---
+// v6: Removed orderBy to avoid composite index (role + createdAt)
+function initAdminUserRealtime() {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  if (adminUserUnsub) adminUserUnsub();
+
+  adminUserUnsub = db.collection('users')
+    .where('role', '==', 'ta')
+    .limit(200)
+    .onSnapshot(function(snap) {
+      cachedAdminUsers = [];
+      snap.forEach(function(d) {
+        cachedAdminUsers.push({ id: d.id, data: d.data() });
+      });
+      // Sort client-side by createdAt desc
+      cachedAdminUsers.sort(function(a, b) {
+        var ta = a.data.createdAt ? (a.data.createdAt.toDate ? a.data.createdAt.toDate() : new Date(a.data.createdAt)) : new Date(0);
+        var tb = b.data.createdAt ? (b.data.createdAt.toDate ? b.data.createdAt.toDate() : new Date(b.data.createdAt)) : new Date(0);
+        return tb - ta;
+      });
+      renderAdminDashUsers();
+      renderAdminUserList();
+    }, function(err) {
+      console.error('Admin users realtime error:', err);
+      var el = document.getElementById('adminUserList');
+      if (el) el.innerHTML = '<div class="empty-state"><h4>Gagal memuat data user</h4><p>' + esc(err.message || 'Terjadi kesalahan') + '</p></div>';
+      showToast('Gagal memuat data user', 'error');
+    });
+}
+
+// --- Init all admin listeners ---
+function initAdminRealtime() {
+  initAdminReportRealtime();
+  initAdminUserRealtime();
+}
+
+// ============================================================
+// PAGE NAVIGATION
+// ============================================================
+function switchPage(name) {
+  document.querySelectorAll('.tab-page').forEach(function(p) { p.classList.remove('active'); });
+  var el = document.getElementById('page_' + name);
+  if (el) el.classList.add('active');
+
+  document.querySelectorAll('.nav-item').forEach(function(n) {
+    n.classList.toggle('active', n.dataset.page === name);
+  });
+
+  var titles = {
+    home: 'Beranda', buat: 'Buat Laporan', riwayat: 'Riwayat', profil: 'Profil',
+    a_home: 'Dashboard', a_laporan: 'Kelola Laporan', a_user: 'Kelola TA'
+  };
+  var pt = document.getElementById('pageTitle');
+  if (pt && titles[name]) pt.textContent = titles[name];
+
+  if (name === 'home') renderTADashboard();
+  if (name === 'buat') loadBuatForm();
+  if (name === 'riwayat') renderRiwayat();
+  if (name === 'profil') loadProfil();
+  if (name === 'a_home') { renderAdminDashStats(); renderAdminDashUsers(); }
+  if (name === 'a_laporan') { setDateToday(); setMonthThis(); renderDailyReports(); }
+  if (name === 'a_user') renderAdminUserList();
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+function checkAuth(role) {
+  return new Promise(function(resolve, reject) {
+    var resolved = false;
+    var nullTimer = null;
+
+    var unsub = auth.onAuthStateChanged(async function(user) {
+      // User found — Firebase restored the persisted session
+      if (user) {
+        // Cancel any pending null-check timer
+        if (nullTimer) { clearTimeout(nullTimer); nullTimer = null; }
+        if (resolved) return;
+        try {
+          var doc = await db.collection('users').doc(user.uid).get();
+          if (!doc.exists) {
+            showToast('Data user tidak ditemukan', 'error');
+            auth.signOut();
+            resolved = true;
+            unsub();
+            location.href = 'index.html';
+            return reject('no data');
+          }
+          var u = doc.data();
+          if (u.status !== 'active') {
+            showToast('Akun belum di-approve admin', 'warning');
+            auth.signOut();
+            resolved = true;
+            unsub();
+            location.href = 'index.html';
+            return reject('not active');
+          }
+          if (role && u.role !== role) {
+            showToast('Akses ditolak', 'error');
+            resolved = true;
+            unsub();
+            location.href = u.role === 'admin' ? 'admin.html' : 'ta.html';
+            return reject('wrong role');
+          }
+          resolved = true;
+          unsub();
+          currentUser = { uid: user.uid, email: user.email, role: u.role, ...u };
+          resolve(currentUser);
+        } catch (e) {
+          console.error('checkAuth error:', e);
+          if (!resolved) { resolved = true; reject(e); }
+        }
+        return;
+      }
+
+      // No user yet — Firebase might still be restoring persisted session
+      // Wait up to 5 seconds before giving up
+      if (!resolved && !nullTimer) {
+        nullTimer = setTimeout(function() {
+          nullTimer = null;
+          if (!resolved && !auth.currentUser) {
+            resolved = true;
+            unsub();
+            location.href = 'index.html';
+            return reject('no auth');
+          }
+        }, 5000);
+      }
+    });
+  });
+}
+
+function logout() {
+  if (confirm('Keluar dari aplikasi?')) {
+    cleanupListeners();
+    localStorage.removeItem('pdi_ta_logged_in');
+    auth.signOut().then(function() { location.href = 'index.html'; }).catch(function(e) { showToast(e.message, 'error'); });
+  }
+}
+
+function confirmLogout() {
+  logout();
+}
+
+async function doLogin() {
+  var email = $v('loginEmail'), pw = $v('loginPassword');
+  if (!email || !pw) return showToast('Isi email dan password', 'error');
+  showLoading();
+  try {
+    var res = await auth.signInWithEmailAndPassword(email, pw);
+    var doc = await db.collection('users').doc(res.user.uid).get();
+    if (!doc.exists) {
+      hideLoading();
+      showToast('Data user tidak ditemukan', 'error');
+      auth.signOut();
+      return;
+    }
+    var u = doc.data();
+    if (u.status === 'pending') {
+      hideLoading();
+      showToast('Akun belum di-approve. Hubungi admin.', 'warning');
+      auth.signOut();
+      return;
+    }
+    if (u.status === 'rejected') {
+      hideLoading();
+      showToast('Akun ditolak oleh admin', 'error');
+      auth.signOut();
+      return;
+    }
+    hideLoading();
+    showToast('Login berhasil!', 'success');
+    location.href = u.role === 'admin' ? 'admin.html' : 'ta.html';
+  } catch (e) {
+    hideLoading();
+    var m = {
+      'auth/user-not-found': 'Email tidak terdaftar',
+      'auth/wrong-password': 'Password salah',
+      'auth/invalid-email': 'Format email tidak valid',
+      'auth/too-many-requests': 'Terlalu banyak percobaan',
+      'auth/network-request-failed': 'Koneksi bermasalah'
+    };
+    showToast(m[e.code] || ('Gagal: ' + (e.message || '')), 'error');
+  }
+}
+
+async function doRegister() {
+  var nama = $v('regNama'), email = $v('regEmail'), pw = $v('regPw'), cpw = $v('regPwC');
+  if (!nama || !email || !pw || !cpw) return showToast('Semua field wajib diisi', 'error');
+  if (pw.length < 6) return showToast('Password minimal 6 karakter', 'error');
+  if (pw !== cpw) return showToast('Konfirmasi password tidak cocok', 'error');
+  showLoading();
+  try {
+    var r = await auth.createUserWithEmailAndPassword(email, pw);
+    await db.collection('users').doc(r.user.uid).set({
+      email: email,
+      nama: nama,
+      role: 'ta',
+      status: 'pending',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    await auth.signOut();
+    hideLoading();
+    showToast('Pendaftaran berhasil! Tunggu approval admin.', 'success');
+    switchAuthTab('login');
+  } catch (e) {
+    hideLoading();
+    if (auth.currentUser && e.code && !e.code.startsWith('auth/')) {
+      try { await auth.currentUser.delete(); } catch (delErr) {}
+    }
+    var m = {
+      'auth/email-already-in-use': 'Email sudah terdaftar',
+      'auth/invalid-email': 'Format email tidak valid',
+      'auth/weak-password': 'Password terlalu lemah',
+      'auth/operation-not-allowed': 'Email/Password auth belum diaktifkan',
+      'auth/network-request-failed': 'Koneksi bermasalah',
+      'auth/too-many-requests': 'Terlalu banyak percobaan'
+    };
+    showToast(m[e.code] || ('Gagal: ' + (e.message || '')), 'error');
+  }
+}
+
+function switchAuthTab(t) {
+  document.getElementById('formLogin').style.display = t === 'login' ? 'block' : 'none';
+  document.getElementById('formRegister').style.display = t === 'register' ? 'block' : 'none';
+  document.querySelectorAll('.auth-toggle button').forEach(function(b) {
+    b.classList.toggle('active', (t === 'login' && b.textContent === 'Masuk') || (t === 'register' && b.textContent === 'Daftar'));
+  });
+}
+
+async function doResetPw() {
+  var email = $v('loginEmail');
+  if (!email) return showToast('Masukkan email dulu', 'error');
+  try {
+    await auth.sendPasswordResetEmail(email);
+    showToast('Link reset password dikirim', 'success');
+  } catch (e) { showToast('Gagal: ' + e.message, 'error'); }
+}
+
+// ============================================================
+// CLOUDINARY UPLOAD
+// ============================================================
+async function uploadToCloudinary(file) {
+  var fd = new FormData();
+  fd.append('file', file);
+  fd.append('upload_preset', UPLOAD_PRESET);
+  try {
+    var r = await fetch(CLOUDINARY_URL, { method: 'POST', body: fd });
+    if (r.ok) { var d = await r.json(); return d.secure_url; }
+  } catch (e) {
+    console.warn('Cloudinary gagal, pakai base64:', e);
+  }
+  return new Promise(function(res, rej) {
+    var fr = new FileReader();
+    fr.onload = function() { res(fr.result); };
+    fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+}
+
+async function processFiles(input, gridId) {
+  var files = Array.from(input.files);
+  if (!files.length) return;
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    if (f.size > 5 * 1024 * 1024) { showToast(f.name + ' terlalu besar', 'warning'); continue; }
+    if (!f.type.startsWith('image/')) { showToast(f.name + ' bukan gambar', 'warning'); continue; }
+    showToast('Mengupload ' + f.name + '...', 'info');
+    try {
+      var url = await uploadToCloudinary(f);
+      uploadedPhotos.push(url);
+      var g = document.getElementById(gridId);
+      var d = document.createElement('div');
+      d.className = 'photo-thumb';
+      d.innerHTML = '<img src="' + url + '"><button class="rm-btn" onclick="rmPhoto(this,\'' + url + '\')">&times;</button>';
+      g.appendChild(d);
+      showToast('Foto berhasil diupload', 'success');
+    } catch (e) { showToast('Gagal upload ' + f.name, 'error'); }
+  }
+  input.value = '';
+}
+
+function rmPhoto(btn, url) {
+  uploadedPhotos = uploadedPhotos.filter(function(u) { return u !== url; });
+  btn.parentElement.remove();
+}
+
+// ============================================================
+// NOTIFICATIONS (v7: In-app + System Notification + PWA Push)
+// ============================================================
+
+// --- Request browser notification permission ---
+async function requestNotifPermission() {
+  if (!('Notification' in window)) {
+    console.log('[Notif] Browser tidak mendukung Notification API');
+    return false;
+  }
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') {
+    console.log('[Notif] Permission notifikasi ditolak oleh user');
+    return false;
+  }
+  var result = await Notification.requestPermission();
+  console.log('[Notif] Permission result:', result);
+  return result === 'granted';
+}
+
+// --- Show system/browser notification ---
+function showSystemNotification(title, body, icon) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    var notifOptions = {
+      body: body,
+      icon: icon || 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Logo_PDI_Perjuangan.svg/120px-Logo_PDI_Perjuangan.svg.png',
+      badge: 'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Logo_PDI_Perjuangan.svg/120px-Logo_PDI_Perjuangan.svg.png',
+      tag: 'pdi-ta-' + Date.now(),
+      requireInteraction: true,
+      vibrate: [200, 100, 200]
+    };
+    var n = new Notification(title, notifOptions);
+    n.onclick = function() {
+      window.focus();
+      n.close();
+      // Open notif modal if available
+      if (typeof openNotifModal === 'function') openNotifModal();
+      else if (typeof loadNotifPage === 'function') loadNotifPage();
+    };
+    // Auto-close after 8 seconds
+    setTimeout(function() { n.close(); }, 8000);
+    console.log('[Notif] System notification shown:', title);
+  } catch (e) {
+    console.error('[Notif] Failed to show system notification:', e);
+  }
+}
+
+// --- Play notification sound ---
+function playNotifSound() {
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var osc = ctx.createOscillator();
+    var gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.frequency.value = 800;
+    osc.type = 'sine';
+    gain.gain.value = 0.3;
+    osc.start();
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.stop(ctx.currentTime + 0.5);
+    setTimeout(function() {
+      var osc2 = ctx.createOscillator();
+      var gain2 = ctx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.frequency.value = 1000;
+      osc2.type = 'sine';
+      gain2.gain.value = 0.3;
+      osc2.start();
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      osc2.stop(ctx.currentTime + 0.5);
+    }, 200);
+  } catch (e) {}
+}
+
+// --- Init realtime notifications (in-app bell + system notification) ---
+function initNotifs(myUid, isAdmin) {
+  if (notifUnsubscribe) { notifUnsubscribe(); notifUnsubscribe = null; }
+  lastNotifIds = new Set();
+  lastNotifCount = 0;
+  var targets = isAdmin ? [myUid, 'admin', 'all'] : [myUid, 'all'];
+
+  // Request notification permission for system notifications
+  requestNotifPermission();
+
+  // Firestore realtime listener
+  notifUnsubscribe = db.collection('notifikasi')
+    .where('target', 'in', targets)
+    .limit(50)
+    .onSnapshot(function(snap) {
+      var count = 0;
+      var latestUnread = null;
+      var currentIds = new Set();
+
+      snap.forEach(function(d) {
+        currentIds.add(d.id);
+        var data = d.data();
+        if (!data.isRead) {
+          count++;
+          // Track new unread notif (one that wasn't in previous set)
+          if (!lastNotifIds.has(d.id)) {
+            latestUnread = data;
+          }
+        }
+      });
+
+      // Update bell badge
+      var dot = document.getElementById('bellDot');
+      var cnt = document.getElementById('bellCount');
+      if (dot) dot.classList.toggle('show', count > 0);
+      if (cnt) { cnt.textContent = count; cnt.classList.toggle('show', count > 0); }
+      document.querySelectorAll('.nav-badge').forEach(function(b) {
+        b.textContent = count; b.classList.toggle('show', count > 0);
+      });
+
+      // If new unread notification arrived, show system notification + sound
+      if (latestUnread && count > lastNotifCount) {
+        playNotifSound();
+        // Show system notification especially when tab is not visible
+        if (document.hidden) {
+          showSystemNotification(
+            latestUnread.judul || 'Notifikasi Baru',
+            latestUnread.pesan || ''
+          );
+        }
+        // Also update page title with count
+        document.title = '(' + count + ') PDI TA App';
+      } else if (count === 0) {
+        document.title = 'PDI TA App';
+      }
+
+      lastNotifIds = currentIds;
+      lastNotifCount = count;
+      console.log('[Notif] Real-time active. Unread:', count, 'Total:', snap.size);
+    }, function(err) {
+      console.error('[Notif] Listener error:', err.code, err.message);
+      if (err.code === 'failed-precondition') {
+        showToast('Index Firestore notifikasi belum dibuat. Buka console untuk link.', 'error');
+        console.error('[Notif] COMPOSITE INDEX NEEDED. Open this URL:', err.message);
+      } else {
+        showToast('Gagal memuat notifikasi: ' + err.message, 'error');
+      }
+    });
+  console.log('[Notif] Listening for targets:', targets);
+}
+
+async function markRead(notifId) {
+  try { await db.collection('notifikasi').doc(notifId).update({ isRead: true }); } catch (e) {}
+}
+
+async function markAllRead(myUid) {
+  if (!currentUser) return;
+  try {
+    var isAdmin = currentUser.role === 'admin';
+    var targets = isAdmin ? [myUid, 'admin', 'all'] : [myUid, 'all'];
+    var snap = await db.collection('notifikasi')
+      .where('target', 'in', targets)
+      .where('isRead', '==', false)
+      .get();
+    var batch = db.batch();
+    snap.forEach(function(d) { batch.update(d.ref, { isRead: true }); });
+    if (snap.size > 0) await batch.commit();
+    showToast('Semua notifikasi dibaca', 'success');
+    loadNotifPage();
+  } catch (e) {
+    console.error('[Notif] markAllRead error:', e);
+    showToast('Gagal: ' + e.message, 'error');
+  }
+}
+
+function openNotifModal() { loadNotifPage(); openModal('notifModal'); }
+
+function renderNotifs(snapOrData) {
+  var el = document.getElementById('notifModalBody');
+  if (!el) return;
+
+  // Support both original QuerySnapshot and sorted docs array
+  var isEmpty = snapOrData.empty !== undefined ? snapOrData.empty : (snapOrData.empty === true);
+  if (isEmpty || !snapOrData.docs || snapOrData.docs.length === 0) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDD14</div><h4>Belum Ada Notifikasi</h4><p>Notifikasi terbaru muncul di sini</p></div>';
+    return;
+  }
+  var h = '';
+  snapOrData.docs.forEach(function(d) {
+    var n = typeof d.data === 'function' ? d.data() : d.data;
+    var ur = !n.isRead;
+    var judul = (n.judul || '').toLowerCase();
+    var icon = '\uD83D\uDCE2', bg = 'var(--purple-bg)';
+    if (judul.indexOf('diterima') >= 0 || judul.indexOf('akun') >= 0) { icon = '\u2705'; bg = 'var(--green-bg)'; }
+    else if (judul.indexOf('ditolak') >= 0) { icon = '\u274C'; bg = 'var(--red-light)'; }
+    else if (judul.indexOf('revisi') >= 0) { icon = '\uD83D\uDD04'; bg = 'var(--blue-bg)'; }
+    else if (judul.indexOf('laporan baru') >= 0) { icon = '\uD83D\uDCCB'; bg = 'var(--blue-bg)'; }
+    else if (judul.indexOf('pengumuman') >= 0) { icon = '\uD83D\uDCE2'; bg = 'var(--purple-bg)'; }
+
+    h += '<div class="notif-item ' + (ur ? 'unread' : '') + '" onclick="markRead(\'' + d.id + '\')">' +
+      '<div class="notif-ic" style="background:' + bg + '">' + icon + '</div>' +
+      '<div class="notif-body">' +
+        '<div class="nb-title">' + esc(n.judul || '') + '</div>' +
+        '<div class="nb-msg">' + esc(n.pesan || '') + '</div>' +
+        '<span class="nb-time">' + timeAgo(n.createdAt) + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+  el.innerHTML = h;
+}
+
+async function loadNotifPage() {
+  if (!currentUser) return;
+  openModal('notifModal');
+  try {
+    var isAdmin = currentUser.role === 'admin';
+    var targets = isAdmin ? [currentUser.uid, 'admin', 'all'] : [currentUser.uid, 'all'];
+    var snap = await db.collection('notifikasi')
+      .where('target', 'in', targets)
+      .limit(50)
+      .get();
+
+    // Sort client-side by createdAt desc
+    var docs = [];
+    snap.forEach(function(d) { docs.push(d); });
+    docs.sort(function(a, b) {
+      var ta = a.data().createdAt ? (a.data().createdAt.toDate ? a.data().createdAt.toDate() : new Date(a.data().createdAt)) : new Date(0);
+      var tb = b.data().createdAt ? (b.data().createdAt.toDate ? b.data().createdAt.toDate() : new Date(b.data().createdAt)) : new Date(0);
+      return tb - ta;
+    });
+
+    renderNotifs({ docs: docs, empty: docs.length === 0 });
+  } catch (e) {
+    console.error('[Notif] loadNotifPage error:', e);
+    var el = document.getElementById('notifModalBody');
+    if (el) el.innerHTML = '<div class="empty-state"><h4>Gagal memuat</h4></div>';
+  }
+}
+
+// ============================================================
+// TA MODULE (Real-Time)
+// ============================================================
+
+// --- Render TA Dashboard from cached data ---
+function renderTADashboard() {
+  var total = cachedTAReports.length;
+  var pending = 0, approved = 0, rejected = 0;
+  cachedTAReports.forEach(function(item) {
+    if (item.data.status === 'pending') pending++;
+    else if (item.data.status === 'approved') approved++;
+    else if (item.data.status === 'rejected') rejected++;
+  });
+
+  $s('s_total', total);
+  $s('s_pending', pending);
+  $s('s_approved', approved);
+  $s('s_rejected', rejected);
+
+  var container = document.getElementById('recentList');
+  if (!container) return;
+
+  if (!cachedTAReports.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+    return;
+  }
+
+  var h = '';
+  var limit = Math.min(5, cachedTAReports.length);
+  for (var i = 0; i < limit; i++) {
+    h += renderReportCard(cachedTAReports[i].data, cachedTAReports[i].id);
+  }
+  container.innerHTML = h;
+}
+
+// --- Render Riwayat from cached data (with period filter) ---
+function renderRiwayat() {
+  var periodEl = document.getElementById('fPeriod');
+  var period = periodEl ? periodEl.value : 'all';
+  var filtered = filterByPeriod(cachedTAReports, period);
+
+  var ap = 0, pe = 0;
+  filtered.forEach(function(item) {
+    if (item.data.status === 'approved') ap++;
+    else if (item.data.status === 'pending') pe++;
+  });
+  $s('f_total', filtered.length);
+  $s('f_approved', ap);
+  $s('f_pending', pe);
+
+  var container = document.getElementById('riwayatList');
+  if (!container) return;
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4><p>Belum ada laporan untuk periode ini</p></div>';
+    return;
+  }
+
+  var h = '';
+  filtered.forEach(function(item) {
+    h += renderReportCard(item.data, item.id);
+  });
+  container.innerHTML = h;
+}
+
+// Fallback: load TA data once (used if real-time not active)
+// v6: Removed orderBy from compound query
+async function loadTADashboard() {
+  if (!currentUser) return;
+  if (taReportUnsub) { renderTADashboard(); return; }
+  var uid = currentUser.uid;
+  try {
+    var totalSnap = await db.collection('laporan').where('userId', '==', uid).get();
+    var pendingSnap = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'pending').get();
+    var approvedSnap = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'approved').get();
+    var rejectedSnap = await db.collection('laporan').where('userId', '==', uid).where('status', '==', 'rejected').get();
+
+    $s('s_total', totalSnap.size);
+    $s('s_pending', pendingSnap.size);
+    $s('s_approved', approvedSnap.size);
+    $s('s_rejected', rejectedSnap.size);
+
+    // Get all reports and sort client-side
+    var allReports = [];
+    totalSnap.forEach(function(d) { allReports.push({ id: d.id, data: normalizeReport(d.data()) }); });
+    allReports.sort(function(a, b) {
+      var ta = a.data.createdAt ? (a.data.createdAt.toDate ? a.data.createdAt.toDate() : new Date(a.data.createdAt)) : new Date(0);
+      var tb = b.data.createdAt ? (b.data.createdAt.toDate ? b.data.createdAt.toDate() : new Date(b.data.createdAt)) : new Date(0);
+      return tb - ta;
+    });
+
+    var container = document.getElementById('recentList');
+    if (!container) return;
+
+    if (!allReports.length) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+      return;
+    }
+
+    var h = '';
+    var limit = Math.min(5, allReports.length);
+    for (var i = 0; i < limit; i++) {
+      h += renderReportCard(allReports[i].data, allReports[i].id);
+    }
+    container.innerHTML = h;
+  } catch (e) {
+    console.error('loadTADashboard error:', e);
+    showToast('Gagal memuat dashboard', 'error');
+    var container = document.getElementById('recentList');
+    if (container) container.innerHTML = '<div class="empty-state"><h4>Gagal memuat data</h4></div>';
+  }
+}
+
+// v6: renderReportCard uses normalized data (fotoUrl already filtered, type already normalized)
+function renderReportCard(r, id) {
+  var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+  var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+  var fotoCount = (r.fotoUrl && Array.isArray(r.fotoUrl)) ? r.fotoUrl.length : 0;
+  var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
+
+  return '<div class="report-item" onclick="viewReport(\'' + id + '\')">' +
+    '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
+    '<div class="ri-body">' +
+      '<div class="ri-title">' + esc(r.judul) + '</div>' +
+      '<div class="ri-sub">' + esc(r.type || 'Harian') + ' &middot; ' + formatDate(r.tanggal) + '</div>' +
+      '<div class="ri-meta">' +
+        (fotoCount > 0 ? '\uD83D\uDCF7 ' + fotoCount + ' foto &middot; ' : '') +
+        '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
+      '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+// --- Profil ---
+
+// Helper: rebuild avatar UI with photo or initial letter
+function updateAvatarUI(photo, initial) {
+  var avatarEl = document.getElementById('profileAvatar');
+  if (!avatarEl) return;
+  var editIconHTML = '<div style="position:absolute;bottom:-2px;right:-2px;width:24px;height:24px;background:var(--red);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.2);z-index:2;pointer-events:none">\uD83D\uDCF7</div>';
+
+  if (photo) {
+    avatarEl.innerHTML = '<img src="' + photo + '" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:50%">' + editIconHTML;
+    avatarEl.style.background = 'none';
+  } else {
+    avatarEl.innerHTML = '<span style="font-size:28px;font-weight:700;color:#fff;position:relative;z-index:1">' + initial + '</span>' + editIconHTML;
+    avatarEl.style.background = '';
+  }
+}
+
+// Helper: update hero avatar (profile photo in welcome banner)
+function updateHeroAvatar(photo, initial) {
+  var heroEl = document.getElementById('heroAvatar');
+  if (!heroEl) return;
+  if (photo) {
+    heroEl.innerHTML = '<img src="' + photo + '" alt="Foto Profil">';
+  } else {
+    heroEl.innerHTML = '<span>' + (initial || 'T') + '</span>';
+  }
+}
+
+async function processAvatarUpload(input) {
+  var file = input.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) return showToast('File harus berupa gambar', 'error');
+  if (file.size > 5 * 1024 * 1024) return showToast('Ukuran maksimal 5MB', 'error');
+  showLoading();
+  try {
+    var url = await uploadToCloudinary(file);
+    uploadedPhotos = [url];
+    updateAvatarUI(url, '');
+    hideLoading();
+    showToast('Foto berhasil diupload! Klik Simpan untuk menyimpan.', 'success');
+  } catch (e) {
+    hideLoading();
+    showToast('Gagal upload foto: ' + (e.message || ''), 'error');
+  }
+  input.value = '';
+}
+
+async function loadProfil() {
+  if (!currentUser) return;
+  $sv('pNama', currentUser.nama || '');
+  $sv('pJabatan', currentUser.jabatan || '');
+  $sv('pNip', currentUser.nip || '');
+  $sv('pWilayah', currentUser.wilayah || '');
+  $sv('pNohp', currentUser.nohp || '');
+  $sv('pAlamat', currentUser.alamat || '');
+
+  var initial = (currentUser.nama || currentUser.email || 'T').charAt(0).toUpperCase();
+  if (currentUser.photo) {
+    updateAvatarUI(currentUser.photo, initial);
+    uploadedPhotos = [currentUser.photo];
+  } else {
+    updateAvatarUI(null, initial);
+    uploadedPhotos = [];
+  }
+}
+
+async function saveProfil() {
+  var nama = $v('pNama'), nip = $v('pNip'), jabatan = $v('pJabatan');
+  var wilayah = $v('pWilayah'), nohp = $v('pNohp'), alamat = $v('pAlamat');
+  if (!nama || !jabatan) return showToast('Nama dan Jabatan wajib diisi', 'error');
+  showLoading();
+  try {
+    var photo = uploadedPhotos[0] || currentUser.photo || '';
+    await db.collection('users').doc(currentUser.uid).update({
+      nama: nama, nip: nip, jabatan: jabatan, wilayah: wilayah, nohp: nohp, alamat: alamat, photo: photo
+    });
+    currentUser.nama = nama;
+    currentUser.jabatan = jabatan;
+    currentUser.photo = photo;
+    document.getElementById('profileName').textContent = nama;
+    updateAvatarUI(photo, nama.charAt(0).toUpperCase());
+    var welcomeEl = document.getElementById('welcomeName');
+    if (welcomeEl) welcomeEl.textContent = 'Halo, ' + nama + '!';
+    updateHeroAvatar(photo, nama.charAt(0).toUpperCase());
+    hideLoading();
+    showToast('Profil berhasil disimpan!', 'success');
+    switchPage('home');
+  } catch (e) {
+    hideLoading();
+    showToast('Gagal menyimpan: ' + e.message, 'error');
+  }
+}
+
+// --- Buat Laporan ---
+async function loadBuatForm() {
+  if (!currentUser) return;
+  uploadedPhotos = [];
+  var g = document.getElementById('rPhotoGrid');
+  if (g) g.innerHTML = '';
+  $sv('rNama', currentUser.nama || currentUser.email || '');
+  var now = new Date(); $sv('rTanggal', now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0'));
+}
+
+async function submitReport() {
+  var nama = currentUser.nama || $v('rNama');
+  var judul = $v('rJudul');
+  var isi = $v('rIsi');
+  var type = document.getElementById('rType').value;
+  var tanggal = $v('rTanggal');
+
+  if (!judul || !isi || !tanggal) {
+    return showToast('Judul, isi, dan tanggal wajib diisi', 'error');
+  }
+
+  showLoading();
+  try {
+    var fotoUrl = uploadedPhotos.length > 0 ? uploadedPhotos.slice() : [];
+
+    await db.collection('laporan').add({
+      userId: currentUser.uid,
+      nama: nama,
+      judul: judul,
+      isi: isi,
+      type: type || 'Harian',
+      tanggal: firebase.firestore.Timestamp.fromDate(new Date(tanggal)),
+      fotoUrl: fotoUrl,
+      status: 'pending',
+      catatanAdmin: '',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    await db.collection('notifikasi').add({
+      judul: 'Laporan Baru',
+      pesan: nama + ' mengirim laporan: "' + judul + '"',
+      target: 'admin',
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    hideLoading();
+    showToast('Laporan berhasil dikirim!', 'success');
+
+    $sv('rJudul', '');
+    $sv('rIsi', '');
+    uploadedPhotos = [];
+    document.getElementById('rPhotoGrid').innerHTML = '';
+
+    switchPage('riwayat');
+  } catch (e) {
+    hideLoading();
+    console.error('submitReport error:', e);
+    showToast('Gagal mengirim: ' + e.message, 'error');
+  }
+}
+
+// --- Riwayat Laporan (fallback if no realtime) ---
+// v6: Removed orderBy from compound query
+async function loadLaporan() {
+  if (!currentUser) return;
+  if (taReportUnsub) { renderRiwayat(); return; }
+  var period = document.getElementById('fPeriod') ? document.getElementById('fPeriod').value : 'all';
+  var container = document.getElementById('riwayatList');
+  if (!container) return;
+  container.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
+
+  try {
+    var q = db.collection('laporan');
+    if (currentUser.role !== 'admin') q = q.where('userId', '==', currentUser.uid);
+    q = q.limit(200);
+    var snap = await q.get();
+
+    // Filter and sort client-side
+    var allReports = [];
+    snap.forEach(function(d) { allReports.push({ id: d.id, data: normalizeReport(d.data()) }); });
+
+    // Filter by period
+    var filtered = filterByPeriod(allReports, period);
+
+    var ap = 0, pe = 0;
+    filtered.forEach(function(item) {
+      if (item.data.status === 'approved') ap++;
+      else if (item.data.status === 'pending') pe++;
+    });
+    $s('f_total', filtered.length);
+    $s('f_approved', ap);
+    $s('f_pending', pe);
+
+    if (!filtered.length) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4><p>Belum ada laporan untuk periode ini</p></div>';
+      return;
+    }
+
+    // Sort client-side
+    sortReportsByDate(filtered);
+
+    var h = '';
+    filtered.forEach(function(item) { h += renderReportCard(item.data, item.id); });
+    container.innerHTML = h;
+  } catch (e) {
+    console.error('loadLaporan error:', e);
+    container.innerHTML = '<div class="empty-state"><h4>Gagal memuat data</h4></div>';
+  }
+}
+
+// --- View Report Detail ---
+async function viewReport(id) {
+  var body = document.getElementById('reportModalBody');
+  if (!body) return;
+  body.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
+  openModal('reportModal');
+
+  try {
+    var doc = await db.collection('laporan').doc(id).get();
+    if (!doc.exists) { body.innerHTML = '<p style="text-align:center;color:var(--text3)">Tidak ditemukan</p>'; return; }
+    var r = normalizeReport(doc.data());
+    var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+    var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+
+    // Photos (already normalized - fotoUrl is now always a clean array of valid URLs)
+    var photos = '';
+    if (r.fotoUrl && r.fotoUrl.length > 0) {
+      var photoItems = '';
+      r.fotoUrl.forEach(function(f) {
+        photoItems += '<div class="photo-thumb"><img src="' + f + '" onclick="openLightbox(\'' + f + '\')" loading="lazy"></div>';
+      });
+      photos = '<div class="detail-field mt-16"><label>Foto Kegiatan (' + r.fotoUrl.length + ')</label><div class="photo-grid">' + photoItems + '</div></div>';
+    }
+
+    // Admin action buttons
+    var adminActions = '';
+    if (currentUser && currentUser.role === 'admin' && (r.status === 'pending' || r.status === 'revisi')) {
+      adminActions = '<div class="mt-16" style="padding-top:16px;border-top:1px solid var(--border)">' +
+        '<div class="detail-field"><label>Catatan (opsional)</label><textarea id="adminNote" class="form-input" rows="3" placeholder="Catatan admin..."></textarea></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<button class="btn btn-green" style="flex:1;min-width:100px" onclick="approveReport(\'' + id + '\')">\u2713 Diterima</button>' +
+          '<button class="btn" style="flex:1;min-width:100px;background:var(--blue);color:#fff" onclick="reviseReport(\'' + id + '\')">\u21BB Revisi</button>' +
+          '<button class="btn btn-red" style="flex:1;min-width:100px" onclick="rejectReport(\'' + id + '\')">\u2717 Ditolak</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Cetak Word button for admin
+    var printBtn = '';
+    if (currentUser && currentUser.role === 'admin') {
+      printBtn = '<div class="mt-16 no-print" style="padding-top:16px;border-top:1px solid var(--border)">' +
+        '<button class="btn btn-outline btn-block" onclick="printSingleReport(\'' + id + '\')">\uD83D\uDDA8 Cetak ke Word</button>' +
+      '</div>';
+    }
+
+    body.innerHTML =
+      '<div class="flex justify-between items-center mb-16">' +
+        '<span class="status status-' + statusClass + '" style="font-size:12px;padding:5px 14px">' + statusText + '</span>' +
+        '<span class="text-xs text-muted">' + formatDateTime(r.createdAt) + '</span>' +
+      '</div>' +
+      '<div class="detail-field"><label>Tenaga Ahli</label><p><b>' + esc(r.nama || '-') + '</b></p></div>' +
+      '<div class="detail-field"><label>Tanggal</label><p>' + formatDate(r.tanggal) + '</p></div>' +
+      '<div class="detail-field"><label>Tipe</label><p>' + esc(r.type || 'Harian') + '</p></div>' +
+      '<div class="detail-field"><label>Judul</label><p><b>' + esc(r.judul) + '</b></p></div>' +
+      '<div class="detail-field"><label>Isi Laporan</label><div class="detail-isi">' + esc(r.isi) + '</div></div>' +
+      (r.catatanAdmin ? '<div class="detail-field"><label>Catatan Admin</label><div class="detail-note">' + esc(r.catatanAdmin) + '</div></div>' : '') +
+      photos +
+      adminActions +
+      printBtn;
+  } catch (e) {
+    console.error('viewReport error:', e);
+    body.innerHTML = '<p style="text-align:center;color:var(--text3)">Gagal memuat</p>';
+  }
+}
+
+// ============================================================
+// ADMIN MODULE (Real-Time)
+// ============================================================
+
+function renderAdminDashStats() {
+  var totalTA = 0, pendUser = 0, totalRep = 0, pendRep = 0, okRep = 0, monthRep = 0;
+  var now = new Date();
+  var monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  var monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  cachedAdminUsers.forEach(function(item) {
+    totalTA++;
+    if (item.data.status === 'pending') pendUser++;
+  });
+
+  cachedAdminReports.forEach(function(item) {
+    totalRep++;
+    if (item.data.status === 'pending') pendRep++;
+    else if (item.data.status === 'approved') okRep++;
+    if (item.data.createdAt) {
+      var ts = item.data.createdAt.toDate ? item.data.createdAt.toDate() : new Date(item.data.createdAt);
+      if (ts >= monthStart && ts < monthEnd) monthRep++;
+    }
+  });
+
+  $s('a_totalTA', totalTA);
+  $s('a_pendUser', pendUser);
+  $s('a_totalRep', totalRep);
+  $s('a_pendRep', pendRep);
+  $s('a_okRep', okRep);
+  $s('a_monthRep', monthRep);
+}
+
+function renderAdminDashUsers() {
+  var el = document.getElementById('pendUsers');
+  if (!el) return;
+
+  var pendingUsers = cachedAdminUsers.filter(function(item) {
+    return item.data.status === 'pending';
+  });
+
+  if (!pendingUsers.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">\u2705</div><h4>Tidak ada permintaan baru</h4></div>';
+    return;
+  }
+
+  var h = '';
+  pendingUsers.forEach(function(item) {
+    var u = item.data;
+    h += '<div class="pend-user">' +
+      '<div class="pu-info">' +
+        '<div class="pu-name">' + esc(u.nama || u.email) + '</div>' +
+        '<div class="pu-email">' + esc(u.email) + ' &middot; ' + timeAgo(u.createdAt) + '</div>' +
+      '</div>' +
+      '<div class="pu-actions">' +
+        '<button class="btn btn-green btn-sm" onclick="approveUser(\'' + item.id + '\')">Setujui</button>' +
+        '<button class="btn btn-red btn-sm" onclick="rejectUser(\'' + item.id + '\')">Tolak</button>' +
+      '</div>' +
+    '</div>';
+  });
+  el.innerHTML = h;
+}
+
+// --- Render Admin Reports grouped by TA user ---
+function renderAdminReportList() {
+  var periodEl = document.getElementById('aPeriod');
+  var period = periodEl ? periodEl.value : 'all';
+  var filtered = filterByPeriod(cachedAdminReports, period);
+
+  var container = document.getElementById('adminRepList');
+  if (!container) return;
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4></div>';
+    return;
+  }
+
+  var isAdmin = currentUser && currentUser.role === 'admin';
+
+  // Build user info lookup from cached admin users
+  var userInfo = {};
+  cachedAdminUsers.forEach(function(u) {
+    userInfo[u.id] = u.data;
+  });
+
+  // Group reports by userId
+  var grouped = {};
+  filtered.forEach(function(item) {
+    var uid = item.data.userId || 'unknown';
+    if (!grouped[uid]) grouped[uid] = [];
+    grouped[uid].push(item);
+  });
+
+  // Sort users: most reports first
+  var userIds = Object.keys(grouped).sort(function(a, b) {
+    return grouped[b].length - grouped[a].length;
+  });
+
+  // Header with print button
+  var header = '';
+  if (isAdmin && selectedReportIds.size > 0) {
+    header = '<div style="padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">' +
+      '<span style="font-size:12px;font-weight:600;color:var(--text2)">' + selectedReportIds.size + ' laporan dipilih</span>' +
+      '<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="openPrintOptions()">\uD83D\uDDA8 Cetak Word</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="clearAllReportSelections()">Batal</button>' +
+    '</div>';
+  }
+
+  var h = header;
+  var totalUsers = userIds.length;
+  var totalReports = filtered.length;
+
+  // Summary bar
+  h += '<div style="padding:10px 16px;background:var(--red-light);border-bottom:1px solid var(--border);font-size:12px;color:var(--red-dark);font-weight:600">' +
+    totalUsers + ' Tenaga Ahli &middot; ' + totalReports + ' Laporan' +
+  '</div>';
+
+  userIds.forEach(function(uid) {
+    var reports = grouped[uid];
+    var u = userInfo[uid] || {};
+    var nama = u.nama || reports[0].data.nama || 'Unknown';
+    var jabatan = u.jabatan || '-';
+    var userPhoto = u.photo || '';
+    var userStatus = u.status || 'active';
+
+    // User header with avatar, name, and report count
+    var avatarHtml = '';
+    if (userPhoto) {
+      avatarHtml = '<div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-right:10px"><img src="' + userPhoto + '" style="width:100%;height:100%;object-fit:cover"></div>';
+    } else {
+      var initial = nama.charAt(0).toUpperCase();
+      avatarHtml = '<div style="width:36px;height:36px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0;margin-right:10px">' + initial + '</div>';
+    }
+
+    var statusLabel = userStatus === 'active' ? '' : ' <span class="status status-' + userStatus + '" style="font-size:9px;padding:1px 6px">' + (userStatus === 'pending' ? 'Menunggu' : 'Ditolak') + '</span>';
+
+    // Collapsible user group
+    var groupId = 'ug_' + uid.replace(/[^a-zA-Z0-9]/g, '');
+    h += '<div class="user-report-group" style="margin-bottom:4px">' +
+      '<div class="report-item" style="background:var(--bg);cursor:pointer;border-bottom:1px solid var(--border);border-top:2px solid var(--red)" onclick="toggleUserGroup(\'' + groupId + '\')">' +
+        avatarHtml +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px">' + esc(nama) + statusLabel + '</div>' +
+          '<div style="font-size:11px;color:var(--text2)">' + esc(jabatan) + '</div>' +
+        '</div>' +
+        '<div style="text-align:center;flex-shrink:0;margin-right:8px">' +
+          '<div style="font-size:18px;font-weight:800;color:var(--red)">' + reports.length + '</div>' +
+          '<div style="font-size:9px;color:var(--text3);font-weight:600">LAPORAN</div>' +
+        '</div>' +
+        '<div style="color:var(--text3);font-size:12px;transition:transform .2s" id="chevron_' + groupId + '">&#9660;</div>' +
+      '</div>' +
+      '<div id="' + groupId + '" style="border-bottom:1px solid var(--border)">';
+
+    // Reports under this user
+    reports.forEach(function(item) {
+      var r = item.data;
+      var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+      var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+      var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
+      var isChecked = selectedReportIds.has(item.id);
+
+      var quickBtns = '';
+      if ((r.status === 'pending' || r.status === 'revisi') && isAdmin) {
+        quickBtns = ' <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="event.stopPropagation();quickRevise(\'' + item.id + '\')">\u21BB</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
+      }
+
+      var checkbox = '';
+      if (isAdmin) {
+        checkbox = '<div style="display:flex;align-items:center;margin-right:8px" onclick="event.stopPropagation()">' +
+          '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleReportSelect(\'' + item.id + '\', this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--red)">' +
+        '</div>';
+      }
+
+      h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')" style="display:flex;align-items:center;padding-left:56px">' +
+        checkbox +
+        '<div class="ri-icon" style="background:' + iconBg + ';width:36px;height:36px;font-size:15px">\uD83D\uDCC4</div>' +
+        '<div class="ri-body" style="flex:1;min-width:0">' +
+          '<div class="ri-title">' + esc(r.judul) + '</div>' +
+          '<div class="ri-sub">' + formatDate(r.tanggal) + ' &middot; ' + esc(r.type || 'Harian') + '</div>' +
+          '<div class="ri-meta">' +
+            '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
+            quickBtns +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    });
+
+    h += '</div></div>';
+  });
+
+  container.innerHTML = h;
+}
+
+// Toggle expand/collapse user report group
+function toggleUserGroup(groupId) {
+  var el = document.getElementById(groupId);
+  var chevron = document.getElementById('chevron_' + groupId);
+  if (!el) return;
+  if (el.style.display === 'none') {
+    el.style.display = 'block';
+    if (chevron) chevron.innerHTML = '&#9660;';
+  } else {
+    el.style.display = 'none';
+    if (chevron) chevron.innerHTML = '&#9654;';
+  }
+}
+
+// Clear all report selections
+function clearAllReportSelections() {
+  selectedReportIds.clear();
+  renderAdminReportList();
+}
+
+function renderAdminUserList() {
+  var container = document.getElementById('adminUserList');
+  if (!container) return;
+
+  if (!cachedAdminUsers.length) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDC65</div><h4>Belum ada Tenaga Ahli</h4></div>';
+    return;
+  }
+
+  // Count reports per user from cached admin reports (real-time)
+  var reportCounts = {};
+  cachedAdminReports.forEach(function(r) {
+    var uid = r.data.userId;
+    if (uid) reportCounts[uid] = (reportCounts[uid] || 0) + 1;
+  });
+
+  var h = '';
+  cachedAdminUsers.forEach(function(item) {
+    var u = item.data;
+    var statusClass = u.status === 'active' ? 'active' : u.status === 'rejected' ? 'rejected' : 'pending';
+    var statusText = u.status === 'active' ? 'Aktif' : u.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+
+    // Profile photo or initial avatar
+    var avatarHtml = '';
+    if (u.photo) {
+      avatarHtml = '<div style="width:44px;height:44px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-right:12px;background:var(--bg)"><img src="' + u.photo + '" style="width:100%;height:100%;object-fit:cover"></div>';
+    } else {
+      var initial = (u.nama || u.email || 'T').charAt(0).toUpperCase();
+      avatarHtml = '<div style="width:44px;height:44px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;flex-shrink:0;margin-right:12px">' + initial + '</div>';
+    }
+
+    // Total reports for this user
+    var totalReports = reportCounts[item.id] || 0;
+
+    var actions = '<span class="status status-' + statusClass + '">' + statusText + '</span>';
+    if (u.status === 'pending') {
+      actions += ' <button class="btn btn-green btn-sm" onclick="approveUser(\'' + item.id + '\')">\u2713</button>' +
+                 ' <button class="btn btn-red btn-sm" onclick="rejectUser(\'' + item.id + '\')">\u2717</button>';
+    }
+    // Delete button for all users
+    actions += ' <button class="btn btn-ghost btn-sm" onclick="deleteUser(\'' + item.id + '\')" title="Hapus user" style="color:var(--text3);font-size:16px;margin-left:4px">\uD83D\uDDD1</button>';
+
+    h += '<div class="pend-user" style="align-items:center">' +
+      avatarHtml +
+      '<div class="pu-info" style="flex:1;min-width:0">' +
+        '<div class="pu-name">' + esc(u.nama || '-') + '</div>' +
+        '<div class="pu-email">' + esc(u.jabatan || '-') + ' &middot; ' + esc(u.email) + '</div>' +
+      '</div>' +
+      '<div style="text-align:center;margin-right:12px;flex-shrink:0">' +
+        '<div style="font-size:18px;font-weight:800;color:var(--text)">' + totalReports + '</div>' +
+        '<div style="font-size:10px;color:var(--text3);font-weight:500">Laporan</div>' +
+      '</div>' +
+      '<div class="pu-actions">' + actions + '</div>' +
+    '</div>';
+  });
+  container.innerHTML = h;
+}
+
+// --- Fallback: load admin data once ---
+async function loadAdminDash() {
+  if (!currentUser) return;
+  if (adminReportUnsub && adminUserUnsub) { renderAdminDashStats(); renderAdminDashUsers(); return; }
+  try {
+    var taSnap = await db.collection('users').where('role', '==', 'ta').where('status', '==', 'active').get();
+    var pendSnap = await db.collection('users').where('status', '==', 'pending').get();
+    var totalSnap = await db.collection('laporan').get();
+    var pRepSnap = await db.collection('laporan').where('status', '==', 'pending').get();
+    var aRepSnap = await db.collection('laporan').where('status', '==', 'approved').get();
+    var range = getDateRange('monthly');
+    var mRep = await db.collection('laporan').where('createdAt', '>=', range.start).where('createdAt', '<', range.end).get();
+
+    $s('a_totalTA', taSnap.size);
+    $s('a_pendUser', pendSnap.size);
+    $s('a_totalRep', totalSnap.size);
+    $s('a_pendRep', pRepSnap.size);
+    $s('a_okRep', aRepSnap.size);
+    $s('a_monthRep', mRep.size);
+
+    var el = document.getElementById('pendUsers');
+    if (!pendSnap.size) {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">\u2705</div><h4>Tidak ada permintaan baru</h4></div>';
+    } else {
+      var h = '';
+      pendSnap.forEach(function(d) {
+        var u = d.data();
+        h += '<div class="pend-user">' +
+          '<div class="pu-info">' +
+            '<div class="pu-name">' + esc(u.nama || u.email) + '</div>' +
+            '<div class="pu-email">' + esc(u.email) + ' &middot; ' + timeAgo(u.createdAt) + '</div>' +
+          '</div>' +
+          '<div class="pu-actions">' +
+            '<button class="btn btn-green btn-sm" onclick="approveUser(\'' + d.id + '\')">Setujui</button>' +
+            '<button class="btn btn-red btn-sm" onclick="rejectUser(\'' + d.id + '\')">Tolak</button>' +
+          '</div>' +
+        '</div>';
+      });
+      el.innerHTML = h;
+    }
+  } catch (e) {
+    console.error('loadAdminDash error:', e);
+    showToast('Gagal memuat dashboard', 'error');
+  }
+}
+
+async function approveUser(uid) {
+  if (!confirm('Setujui user ini?')) return;
+  showLoading();
+  try {
+    await db.collection('users').doc(uid).update({ status: 'active' });
+    var uDoc = await db.collection('users').doc(uid).get();
+    var name = uDoc.exists ? (uDoc.data().nama || uDoc.data().email) : 'User';
+    await db.collection('notifikasi').add({
+      judul: 'Akun Disetujui',
+      pesan: 'Selamat ' + name + '! Akun Anda telah disetujui.',
+      target: uid,
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    hideLoading();
+    showToast('User disetujui', 'success');
+  } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+async function rejectUser(uid) {
+  var reason = prompt('Alasan penolakan (opsional):');
+  if (reason === null) return;
+  showLoading();
+  try {
+    await db.collection('users').doc(uid).update({ status: 'rejected' });
+    var uDoc = await db.collection('users').doc(uid).get();
+    var name = uDoc.exists ? (uDoc.data().nama || uDoc.data().email) : 'User';
+    await db.collection('notifikasi').add({
+      judul: 'Akun Ditolak',
+      pesan: 'Maaf ' + name + ', akun Anda ditolak.' + (reason ? ' Alasan: ' + reason : ''),
+      target: uid,
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    hideLoading();
+    showToast('User ditolak', 'success');
+  } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+async function deleteUser(uid) {
+  // Get user name for confirmation
+  var userName = 'User';
+  try {
+    var uDoc = await db.collection('users').doc(uid).get();
+    if (uDoc.exists) userName = uDoc.data().nama || uDoc.data().email || 'User';
+  } catch(e) {}
+
+  if (!confirm('Hapus user "' + userName + '"?\n\nSemua laporan user ini juga akan dihapus. Tindakan ini tidak dapat dibatalkan.')) return;
+
+  showLoading();
+  try {
+    // 1. Delete all reports by this user
+    var repSnap = await db.collection('laporan').where('userId', '==', uid).get();
+    if (repSnap.size > 0) {
+      var batch = db.batch();
+      repSnap.forEach(function(doc) { batch.delete(doc.ref); });
+      await batch.commit();
+    }
+
+    // 2. Delete all notifications for this user
+    var notifSnap = await db.collection('notifikasi').where('target', '==', uid).limit(100).get();
+    if (notifSnap.size > 0) {
+      var batch2 = db.batch();
+      notifSnap.forEach(function(doc) { batch2.delete(doc.ref); });
+      await batch2.commit();
+    }
+
+    // 3. Delete user document from Firestore
+    await db.collection('users').doc(uid).delete();
+
+    hideLoading();
+    showToast('User "' + userName + '" berhasil dihapus beserta ' + repSnap.size + ' laporan', 'success');
+  } catch (e) {
+    hideLoading();
+    showToast('Gagal menghapus: ' + e.message, 'error');
+  }
+}
+
+// v6: Fallback - removed orderBy from compound query, sort client-side
+async function loadAdminReports() {
+  if (!currentUser) return;
+  if (adminReportUnsub) { renderAdminReportList(); return; }
+  var period = document.getElementById('aPeriod') ? document.getElementById('aPeriod').value : 'all';
+  var container = document.getElementById('adminRepList');
+  if (!container) return;
+  container.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
+
+  try {
+    var snap = await db.collection('laporan').limit(200).get();
+
+    var allReports = [];
+    snap.forEach(function(d) { allReports.push({ id: d.id, data: normalizeReport(d.data()) }); });
+
+    // Filter by period
+    var filtered = filterByPeriod(allReports, period);
+    // Sort client-side
+    sortReportsByDate(filtered);
+
+    if (!filtered.length) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4></div>';
+      return;
+    }
+
+    var h = '';
+    filtered.forEach(function(item) {
+      var r = item.data;
+      var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+      var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+      var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
+
+      h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')">' +
+        '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
+        '<div class="ri-body">' +
+          '<div class="ri-title">' + esc(r.judul) + '</div>' +
+          '<div class="ri-sub">' + esc(r.nama || '-') + ' &middot; ' + formatDate(r.tanggal) + '</div>' +
+          '<div class="ri-meta">' +
+            '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    });
+    container.innerHTML = h;
+  } catch (e) {
+    console.error('loadAdminReports error:', e);
+    container.innerHTML = '<div class="empty-state"><h4>Gagal memuat</h4></div>';
+  }
+}
+
+// v6: Fallback - removed orderBy from compound query
+async function loadAdminUsers() {
+  if (!currentUser) return;
+  if (adminUserUnsub) { renderAdminUserList(); return; }
+  var container = document.getElementById('adminUserList');
+  if (!container) return;
+  container.innerHTML = '<div class="spinner-center"><div class="spinner"></div></div>';
+
+  try {
+    var snap = await db.collection('users').where('role', '==', 'ta').limit(200).get();
+    if (!snap.size) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDC65</div><h4>Belum ada Tenaga Ahli</h4></div>';
+      return;
+    }
+
+    var allUsers = [];
+    snap.forEach(function(d) { allUsers.push({ id: d.id, data: d.data() }); });
+    // Sort client-side
+    allUsers.sort(function(a, b) {
+      var ta = a.data.createdAt ? (a.data.createdAt.toDate ? a.data.createdAt.toDate() : new Date(a.data.createdAt)) : new Date(0);
+      var tb = b.data.createdAt ? (b.data.createdAt.toDate ? b.data.createdAt.toDate() : new Date(b.data.createdAt)) : new Date(0);
+      return tb - ta;
+    });
+
+    var h = '';
+    allUsers.forEach(function(item) {
+      var d = item;
+      var u = d.data;
+      var statusClass = u.status === 'active' ? 'active' : u.status === 'rejected' ? 'rejected' : 'pending';
+      var statusText = u.status === 'active' ? 'Aktif' : u.status === 'rejected' ? 'Ditolak' : 'Menunggu';
+
+      h += '<div class="pend-user">' +
+        '<div class="pu-info">' +
+          '<div class="pu-name">' + esc(u.nama || '-') + '</div>' +
+          '<div class="pu-email">' + esc(u.email) + ' &middot; ' + (u.jabatan || '-') + '</div>' +
+        '</div>' +
+        '<div class="pu-actions">' +
+          '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
+          (u.status === 'pending' ? ' <button class="btn btn-green btn-sm" onclick="approveUser(\'' + d.id + '\')">\u2713</button> <button class="btn btn-red btn-sm" onclick="rejectUser(\'' + d.id + '\')">\u2717</button>' : '') +
+        '</div>' +
+      '</div>';
+    });
+    container.innerHTML = h;
+  } catch (e) {
+    console.error('loadAdminUsers error:', e);
+    container.innerHTML = '<div class="empty-state"><h4>Gagal memuat</h4></div>';
+  }
+}
+
+// --- Approve / Reject Reports ---
+async function approveReport(id) {
+  if (!confirm('Setujui laporan ini?')) return;
+  showLoading();
+  try {
+    var note = document.getElementById('adminNote') ? $v('adminNote') : '';
+    var upd = { status: 'approved' };
+    if (note) upd.catatanAdmin = note;
+    await db.collection('laporan').doc(id).update(upd);
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
+    await db.collection('notifikasi').add({
+      judul: 'Laporan Diterima',
+      pesan: 'Laporan "' + r.judul + '" telah diterima.' + (note ? ' Catatan: ' + note : ''),
+      target: r.userId,
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    hideLoading();
+    showToast('Laporan diterima', 'success');
+    closeModal('reportModal');
+  } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+async function reviseReport(id) {
+  var note = document.getElementById('adminNote') ? document.getElementById('adminNote').value.trim() : '';
+  if (!note) { note = prompt('Catatan revisi:'); }
+  if (!note) return showToast('Masukkan catatan revisi', 'error');
+  showLoading();
+  try {
+    await db.collection('laporan').doc(id).update({ status: 'revisi', catatanAdmin: note });
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
+    await db.collection('notifikasi').add({
+      judul: 'Laporan Perlu Revisi',
+      pesan: 'Laporan "' + r.judul + '" perlu direvisi. Catatan: ' + note,
+      target: r.userId,
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    hideLoading();
+    showToast('Laporan dikembalikan untuk revisi', 'success');
+    closeModal('reportModal');
+  } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+async function rejectReport(id) {
+  var note = document.getElementById('adminNote') ? $v('adminNote') : '';
+  var reason = note || prompt('Alasan penolakan:');
+  if (!reason) return showToast('Masukkan alasan', 'error');
+  showLoading();
+  try {
+    await db.collection('laporan').doc(id).update({ status: 'rejected', catatanAdmin: reason });
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
+    await db.collection('notifikasi').add({
+      judul: 'Laporan Ditolak',
+      pesan: 'Laporan "' + r.judul + '" ditolak. Catatan: ' + reason,
+      target: r.userId,
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    hideLoading();
+    showToast('Laporan ditolak', 'success');
+    closeModal('reportModal');
+  } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+async function quickApprove(id) {
+  showLoading();
+  try {
+    await db.collection('laporan').doc(id).update({ status: 'approved' });
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
+    await db.collection('notifikasi').add({
+      judul: 'Laporan Diterima',
+      pesan: 'Laporan "' + r.judul + '" telah diterima.',
+      target: r.userId,
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    hideLoading();
+    showToast('Diterima', 'success');
+  } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+async function quickRevise(id) {
+  var note = prompt('Catatan revisi:');
+  if (!note) return;
+  showLoading();
+  try {
+    await db.collection('laporan').doc(id).update({ status: 'revisi', catatanAdmin: note });
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
+    await db.collection('notifikasi').add({
+      judul: 'Laporan Perlu Revisi',
+      pesan: 'Laporan "' + r.judul + '" perlu direvisi. Catatan: ' + note,
+      target: r.userId,
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    hideLoading();
+    showToast('Dikembalikan untuk revisi', 'success');
+  } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+async function quickReject(id) {
+  var reason = prompt('Alasan penolakan:');
+  if (!reason) return;
+  showLoading();
+  try {
+    await db.collection('laporan').doc(id).update({ status: 'rejected', catatanAdmin: reason });
+    var doc = await db.collection('laporan').doc(id).get();
+    var r = doc.data();
+    await db.collection('notifikasi').add({
+      judul: 'Laporan Ditolak',
+      pesan: 'Laporan "' + r.judul + '" ditolak. Catatan: ' + reason,
+      target: r.userId,
+      userId: currentUser.uid,
+      isRead: false,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    hideLoading();
+    showToast('Ditolak', 'success');
+  } catch (e) { hideLoading(); showToast('Gagal: ' + e.message, 'error'); }
+}
+
+// --- Broadcast ---
+async function sendBroadcast() {
+  var title = $v('bcTitle'), msg = $v('bcMsg');
+  if (!title || !msg) return showToast('Judul dan pesan wajib diisi', 'error');
+  showLoading();
+  try {
+    var snap = await db.collection('users').where('role', '==', 'ta').get();
+    // Filter active users client-side (avoids composite index requirement)
+    var activeUsers = [];
+    snap.forEach(function(d) {
+      if (d.data().status === 'active') activeUsers.push(d);
+    });
+    if (activeUsers.length === 0) {
+      hideLoading();
+      return showToast('Tidak ada TA aktif untuk dikirimi broadcast', 'error');
+    }
+    var batch = db.batch();
+    activeUsers.forEach(function(d) {
+      var newDocRef = db.collection('notifikasi').doc();
+      batch.set(newDocRef, {
+        judul: title,
+        pesan: msg,
+        target: d.id,
+        userId: currentUser.uid,
+        isRead: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    });
+    await batch.commit();
+    hideLoading();
+    showToast('Broadcast terkirim ke ' + activeUsers.length + ' TA', 'success');
+    closeModal('bcModal');
+    $sv('bcTitle', ''); $sv('bcMsg', '');
+  } catch (e) {
+    hideLoading();
+    console.error('[Broadcast] Error:', e.code, e.message);
+    showToast('Gagal kirim broadcast: ' + e.message, 'error');
+  }
+}
+
+function printPage() { window.print(); }
+
+// ============================================================
+// WORD EXPORT MODULE (v6)
+// ============================================================
+
+// ============================================================
+// ADMIN LAPORAN: SUB-TAB HARIAN & BULANAN
+// ============================================================
+var currentSubTab = 'harian';
+var pendingWordHTML = null;
+var pendingWordFilename = null;
+
+function switchSubTab(tab) {
+  currentSubTab = tab;
+  document.querySelectorAll('.sub-tab').forEach(function(b) { b.classList.toggle('active', b.dataset.subtab === tab); });
+  document.getElementById('subtab_harian').style.display = tab === 'harian' ? 'block' : 'none';
+  document.getElementById('subtab_bulanan').style.display = tab === 'bulanan' ? 'block' : 'none';
+  if (tab === 'harian') { setDateToday(); renderDailyReports(); }
+  else { setMonthThis(); renderMonthlyReports(); }
+}
+
+function setDateToday() {
+  var el = document.getElementById('dailyDate');
+  if (el) { var n = new Date(); el.value = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-' + String(n.getDate()).padStart(2, '0'); }
+}
+
+function setMonthThis() {
+  var el = document.getElementById('monthlyMonth');
+  if (el) { var n = new Date(); el.value = n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0'); }
+}
+
+// --- Filter reports by specific date string (YYYY-MM-DD) ---
+function filterReportsByDate(dateStr) {
+  if (!dateStr) return [];
+  return cachedAdminReports.filter(function(item) {
+    var tanggal = item.data.tanggal;
+    if (!tanggal) return false;
+    if (typeof tanggal === 'string') return tanggal === dateStr;
+    if (tanggal.toDate) {
+      var d = tanggal.toDate();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') === dateStr;
+    }
+    return false;
+  });
+}
+
+// --- Filter reports by month (YYYY-MM) ---
+function filterReportsByMonth(monthStr) {
+  if (!monthStr) return [];
+  return cachedAdminReports.filter(function(item) {
+    var tanggal = item.data.tanggal;
+    if (!tanggal) return false;
+    var dStr = '';
+    if (typeof tanggal === 'string') dStr = tanggal.substring(0, 7);
+    else if (tanggal.toDate) { var d = tanggal.toDate(); dStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+    return dStr === monthStr;
+  });
+}
+
+// --- Render Daily Reports (grouped by user) ---
+function renderDailyReports() {
+  var dateStr = document.getElementById('dailyDate').value;
+  var container = document.getElementById('dailyRepList');
+  var titleEl = document.getElementById('dailyTitle');
+  if (!container) return;
+
+  if (!dateStr) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><h4>Pilih tanggal</h4></div>'; return; }
+
+  var filtered = filterReportsByDate(dateStr);
+  var dateLabel = new Date(dateStr + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  if (titleEl) titleEl.textContent = 'Laporan Harian';
+
+  if (!filtered.length) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan</h4><p>' + esc(dateLabel) + '</p></div>'; return; }
+
+  container.innerHTML = '<div style="padding:10px 16px;background:var(--red-light);border-bottom:1px solid var(--border);font-size:12px;color:var(--red-dark);font-weight:600">' + filtered.length + ' laporan &middot; ' + esc(dateLabel) + '</div>' + buildGroupedReportHTML(filtered);
+}
+
+// --- Render Monthly Reports (grouped by user, then by date) ---
+function renderMonthlyReports() {
+  var monthStr = document.getElementById('monthlyMonth').value;
+  var container = document.getElementById('monthlyRepList');
+  var titleEl = document.getElementById('monthlyTitle');
+  if (!container) return;
+
+  if (!monthStr) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📆</div><h4>Pilih bulan</h4></div>'; return; }
+
+  var filtered = filterReportsByMonth(monthStr);
+  var [y, m] = monthStr.split('-');
+  var monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  var monthLabel = monthNames[parseInt(m) - 1] + ' ' + y;
+  if (titleEl) titleEl.textContent = 'Laporan Bulanan';
+
+  if (!filtered.length) { container.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan</h4><p>' + esc(monthLabel) + '</p></div>'; return; }
+
+  container.innerHTML = '<div style="padding:10px 16px;background:var(--red-light);border-bottom:1px solid var(--border);font-size:12px;color:var(--red-dark);font-weight:600">' + filtered.length + ' laporan &middot; ' + esc(monthLabel) + '</div>' + buildGroupedReportHTML(filtered);
+}
+
+// --- Build grouped report HTML (by user) for daily/monthly ---
+function buildGroupedReportHTML(filtered) {
+  var isAdmin = currentUser && currentUser.role === 'admin';
+  var userInfo = {};
+  cachedAdminUsers.forEach(function(u) { userInfo[u.id] = u.data; });
+
+  // Group by userId
+  var grouped = {};
+  filtered.forEach(function(item) {
+    var uid = item.data.userId || 'unknown';
+    if (!grouped[uid]) grouped[uid] = [];
+    grouped[uid].push(item);
+  });
+
+  var userIds = Object.keys(grouped).sort(function(a, b) { return grouped[b].length - grouped[a].length; });
+  var h = '';
+
+  userIds.forEach(function(uid) {
+    var reports = grouped[uid];
+    var u = userInfo[uid] || {};
+    var nama = u.nama || reports[0].data.nama || 'Unknown';
+    var jabatan = u.jabatan || '-';
+    var userPhoto = u.photo || '';
+
+    var avatarHtml = '';
+    if (userPhoto) {
+      avatarHtml = '<div style="width:36px;height:36px;border-radius:50%;overflow:hidden;flex-shrink:0;margin-right:10px"><img src="' + userPhoto + '" style="width:100%;height:100%;object-fit:cover"></div>';
+    } else {
+      avatarHtml = '<div style="width:36px;height:36px;border-radius:50%;background:var(--red);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0;margin-right:10px">' + nama.charAt(0).toUpperCase() + '</div>';
+    }
+
+    var groupId = 'ug_' + uid.replace(/[^a-zA-Z0-9]/g, '');
+    h += '<div style="margin-bottom:2px">' +
+      '<div class="report-item" style="background:var(--bg);cursor:pointer;border-bottom:1px solid var(--border);border-top:2px solid var(--red)" onclick="toggleUserGroup(\'' + groupId + '\')">' +
+        avatarHtml +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:14px;font-weight:700">' + esc(nama) + '</div>' +
+          '<div style="font-size:11px;color:var(--text2)">' + esc(jabatan) + '</div>' +
+        '</div>' +
+        '<div style="text-align:center;flex-shrink:0;margin-right:8px">' +
+          '<div style="font-size:18px;font-weight:800;color:var(--red)">' + reports.length + '</div>' +
+          '<div style="font-size:9px;color:var(--text3);font-weight:600">LAPORAN</div>' +
+        '</div>' +
+        '<div style="color:var(--text3);font-size:12px" id="chevron_' + groupId + '">&#9660;</div>' +
+      '</div>' +
+      '<div id="' + groupId + '" style="border-bottom:1px solid var(--border)">';
+
+    reports.forEach(function(item) {
+      var r = item.data;
+      var statusClass = r.status === 'approved' ? 'approved' : r.status === 'rejected' ? 'rejected' : r.status === 'revisi' ? 'revisi' : 'pending';
+      var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+      var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
+
+      var quickBtns = '';
+      if ((r.status === 'pending' || r.status === 'revisi') && isAdmin) {
+        quickBtns = ' <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="event.stopPropagation();quickRevise(\'' + item.id + '\')">\u21BB</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
+      }
+
+      h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')" style="display:flex;align-items:center;padding-left:56px">' +
+        '<div class="ri-icon" style="background:' + iconBg + ';width:36px;height:36px;font-size:15px">\uD83D\uDCC4</div>' +
+        '<div class="ri-body" style="flex:1;min-width:0">' +
+          '<div class="ri-title">' + esc(r.judul) + '</div>' +
+          '<div class="ri-sub">' + formatDate(r.tanggal) + ' &middot; ' + esc(r.type || 'Harian') + '</div>' +
+          '<div class="ri-meta"><span class="status status-' + statusClass + '">' + statusText + '</span>' + quickBtns + '</div>' +
+        '</div>' +
+      '</div>';
+    });
+
+    h += '</div></div>';
+  });
+  return h;
+}
+
+// ============================================================
+// PRINT / CETAK: Preview + Word Export
+// ============================================================
+
+// --- Print Daily Reports ---
+async function printDailyReports() {
+  var dateStr = document.getElementById('dailyDate').value;
+  if (!dateStr) return showToast('Pilih tanggal terlebih dahulu', 'warning');
+  var filtered = filterReportsByDate(dateStr);
+  if (!filtered.length) return showToast('Tidak ada laporan untuk tanggal ini', 'warning');
+  var dateLabel = new Date(dateStr + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  var title = 'Laporan Harian - ' + dateLabel;
+  var filename = 'Laporan_Harian_' + dateStr.replace(/-/g, '') + '.doc';
+  await showPrintPreview(filtered, title, filename);
+}
+
+// --- Print Monthly Reports ---
+async function printMonthlyReports() {
+  var monthStr = document.getElementById('monthlyMonth').value;
+  if (!monthStr) return showToast('Pilih bulan terlebih dahulu', 'warning');
+  var filtered = filterReportsByMonth(monthStr);
+  if (!filtered.length) return showToast('Tidak ada laporan untuk bulan ini', 'warning');
+  var [y, m] = monthStr.split('-');
+  var monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  var title = 'Laporan Bulanan - ' + monthNames[parseInt(m) - 1] + ' ' + y;
+  var filename = 'Laporan_Bulanan_' + monthStr.replace(/-/g, '') + '.doc';
+  await showPrintPreview(filtered, title, filename);
+}
+
+// --- Print Single Report (from detail modal) ---
+async function printSingleReport(id) {
+  showLoading();
+  try {
+    var doc = await db.collection('laporan').doc(id).get();
+    if (!doc.exists) { hideLoading(); showToast('Laporan tidak ditemukan', 'error'); return; }
+    var r = normalizeReport(doc.data());
+    var reportData = [{ id: doc.id, data: r }];
+    var title = 'Laporan - ' + (r.judul || 'Tanpa Judul');
+    var filename = 'Laporan_' + (r.judul || 'report').replace(/[^a-zA-Z0-9\u00C0-\u024F]/g, '_').substring(0, 30) + '.doc';
+    await showPrintPreview(reportData, title, filename);
+    hideLoading();
+  } catch (e) {
+    hideLoading();
+    showToast('Gagal: ' + e.message, 'error');
+  }
+}
+
+// --- Show Preview Modal ---
+async function showPrintPreview(reports, title, filename) {
+  showLoading();
+  openModal('printPreviewModal');
+
+  var infoEl = document.getElementById('previewInfo');
+  var bodyEl = document.getElementById('printPreviewBody');
+  if (infoEl) infoEl.textContent = reports.length + ' laporan';
+  if (bodyEl) bodyEl.innerHTML = '<div class="spinner-center"><div class="spinner"></div><p style="margin-top:12px;font-size:12px;color:var(--text2)">Mengunduh foto dan menyiapkan preview...</p></div>';
+
+  try {
+    // Count total photos for progress feedback
+    var totalPhotos = 0;
+    reports.forEach(function(item) {
+      var r = item.data || item;
+      var fotoList = (r.fotoUrl && Array.isArray(r.fotoUrl)) ? r.fotoUrl : [];
+      totalPhotos += fotoList.length;
+    });
+
+    var html = await generateWordHTML(reports, title);
+    pendingWordHTML = html;
+    pendingWordFilename = filename;
+
+    // Extract body content for preview (strip Word XML wrapper)
+    var bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    var previewContent = bodyMatch ? bodyMatch[1] : html;
+
+    if (bodyEl) bodyEl.innerHTML = '<div style="background:#fff;padding:24px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1a1a1a;line-height:1.6">' + previewContent + '</div>';
+    if (infoEl) infoEl.textContent = reports.length + ' laporan' + (totalPhotos > 0 ? ' &middot; ' + totalPhotos + ' foto ter-embed' : '');
+    hideLoading();
+  } catch (e) {
+    hideLoading();
+    if (bodyEl) bodyEl.innerHTML = '<p style="text-align:center;color:var(--red)">Gagal memuat preview: ' + esc(e.message) + '</p>';
+  }
+}
+
+// --- Confirm Download Word after preview ---
+function confirmDownloadWord() {
+  if (!pendingWordHTML) return showToast('Tidak ada dokumen untuk diunduh', 'warning');
+  downloadWordDoc(pendingWordHTML, pendingWordFilename);
+  showToast('Dokumen berhasil diunduh', 'success');
+  closeModal('printPreviewModal');
+  pendingWordHTML = null;
+  pendingWordFilename = null;
+}
+
+// --- Generate Word-compatible HTML from reports ---
+// Each report gets its own page (page-break-before: always)
+// Photos are converted to base64 and embedded directly in the Word doc
+async function generateWordHTML(reports, title) {
+  var reportsWithImages = [];
+  for (var i = 0; i < reports.length; i++) {
+    var item = reports[i];
+    var r = item.data || item;
+    var fotoList = (r.fotoUrl && Array.isArray(r.fotoUrl)) ? r.fotoUrl : [];
+    var base64Images = [];
+
+    for (var j = 0; j < fotoList.length; j++) {
+      try {
+        base64Images.push(await urlToBase64(fotoList[j]));
+      } catch (e) {
+        base64Images.push(fotoList[j]);
+      }
+    }
+
+    reportsWithImages.push({ data: r, images: base64Images });
+  }
+
+  // Sort by date ascending
+  reportsWithImages.sort(function(a, b) {
+    var ta = a.data.tanggal ? (a.data.tanggal.toDate ? a.data.tanggal.toDate() : new Date(a.data.tanggal)) : new Date(0);
+    var tb = b.data.tanggal ? (b.data.tanggal.toDate ? b.data.tanggal.toDate() : new Date(b.data.tanggal)) : new Date(0);
+    return ta - tb;
+  });
+
+  var now = new Date();
+  var timestamp = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  var html =
+    '<html xmlns:o="urn:schemas-microsoft-com:office:office" ' +
+    'xmlns:w="urn:schemas-microsoft-com:office:word" ' +
+    'xmlns="http://www.w3.org/TR/REC-html40">' +
+    '<head><meta charset="utf-8">' +
+    '<style>' +
+      'body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1a1a1a; margin: 2cm; line-height: 1.6; }' +
+      '.cover { text-align: center; border-bottom: 3px double #c4161c; padding-bottom: 20px; margin-bottom: 30px; page-break-after: always; }' +
+      '.cover h1 { font-size: 18pt; color: #c4161c; margin: 0 0 8px; font-weight: 700; letter-spacing: 1px; }' +
+      '.cover h2 { font-size: 13pt; color: #444; margin: 0 0 4px; font-weight: 400; }' +
+      '.cover .org { font-size: 11pt; color: #888; margin-top: 16px; }' +
+      '.cover .title-doc { font-size: 14pt; color: #1a1a1a; margin-top: 24px; font-weight: 700; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; padding: 12px 0; }' +
+      '.cover .timestamp { font-size: 9pt; color: #aaa; margin-top: 20px; }' +
+      '.report { margin-bottom: 20px; }' +
+      '.report-header { background: #f8f8f8; padding: 14px 16px; border-left: 4px solid #c4161c; margin-bottom: 16px; }' +
+      '.report-header h3 { font-size: 14pt; margin: 0 0 6px; color: #1a1a1a; }' +
+      '.report-meta { font-size: 9pt; color: #888; margin: 0; }' +
+      '.field { margin-bottom: 10px; }' +
+      '.field label { font-size: 9pt; font-weight: 700; color: #888; text-transform: uppercase; display: block; margin-bottom: 2px; letter-spacing: 0.5px; }' +
+      '.field p { margin: 0; font-size: 11pt; }' +
+      '.isi { background: #f9f9f9; padding: 14px 16px; border-radius: 4px; font-size: 11pt; line-height: 1.8; white-space: pre-wrap; margin: 8px 0; border: 1px solid #eee; }' +
+      '.catatan { background: #fff7ed; padding: 12px 16px; border-left: 3px solid #ea580c; font-size: 10pt; color: #ea580c; margin: 8px 0; }' +
+      '.status-approved { color: #16a34a; font-weight: 700; }' +
+      '.status-pending { color: #ea580c; font-weight: 700; }' +
+      '.status-rejected { color: #c4161c; font-weight: 700; }' +
+      '.status-revisi { color: #2563eb; font-weight: 700; }' +
+      '.photos { margin: 14px 0; }' +
+      '.photos-title { font-size: 9pt; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }' +
+      '.photos img { max-width: 450px; max-height: 340px; margin: 6px 10px 6px 0; border: 1px solid #e0e0e0; border-radius: 4px; display: inline; }' +
+      '.page-num { text-align: center; font-size: 9pt; color: #ccc; margin-top: 40px; }' +
+      '.footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #e8e8e8; text-align: center; font-size: 8pt; color: #bbb; }' +
+      '@page { margin: 2cm; size: A4; }' +
+    '</style>' +
+    '</head><body>' +
+
+    // Cover page
+    '<div class="cover">' +
+      '<h1>LAPORAN TENAGA AHLI</h1>' +
+      '<h2>Fraksi PDI Perjuangan</h2>' +
+      '<div class="org">Kabupaten Kepulauan Meranti</div>' +
+      '<div class="title-doc">' + esc(title) + '</div>' +
+      '<div class="timestamp">' + reportsWithImages.length + ' laporan &middot; Dicetak: ' + timestamp + '</div>' +
+    '</div>';
+
+  // Each report on a new page - use explicit page break for Word compatibility
+  for (var k = 0; k < reportsWithImages.length; k++) {
+    var item = reportsWithImages[k];
+    var r = item.data;
+    var imgs = item.images;
+
+    var reportType = r.type || 'Harian';
+    var statusClass = r.status === 'approved' ? 'status-approved' : r.status === 'rejected' ? 'status-rejected' : r.status === 'revisi' ? 'status-revisi' : 'status-pending';
+    var statusText = r.status === 'approved' ? 'Diterima' : r.status === 'rejected' ? 'Ditolak' : r.status === 'revisi' ? 'Revisi' : 'Menunggu';
+
+    // Insert explicit page break before each report (except the first one)
+    if (k > 0) {
+      html += '<br clear="all" style="page-break-before:always;mso-break-type:section-break">';
+    }
+
+    html += '<div class="report">' +
+      '<div class="report-header">' +
+        '<h3>' + esc(r.judul || 'Tanpa Judul') + '</h3>' +
+        '<p class="report-meta">' + esc(r.nama || '-') + ' &middot; ' + formatDate(r.tanggal) + ' &middot; ' + esc(reportType) + ' &middot; <span class="' + statusClass + '">' + statusText + '</span></p>' +
+      '</div>' +
+
+      '<div class="field"><label>Tenaga Ahli</label><p><b>' + esc(r.nama || '-') + '</b></p></div>' +
+      '<div class="field"><label>Tanggal Kegiatan</label><p>' + formatDate(r.tanggal) + '</p></div>' +
+      '<div class="field"><label>Tipe Laporan</label><p>' + esc(reportType) + '</p></div>' +
+      '<div class="field"><label>Status</label><p><span class="' + statusClass + '">' + statusText + '</span></p></div>' +
+      '<div class="field"><label>Isi Laporan</label></div>' +
+      '<div class="isi">' + esc(r.isi || '-') + '</div>';
+
+    if (r.catatanAdmin) {
+      html += '<div class="field"><label>Catatan Admin</label></div>' +
+        '<div class="catatan">' + esc(r.catatanAdmin) + '</div>';
+    }
+
+    if (imgs.length > 0) {
+      html += '<div class="photos"><div class="photos-title">Foto Kegiatan (' + imgs.length + ')</div>';
+      for (var p = 0; p < imgs.length; p++) {
+        html += '<img src="' + imgs[p] + '">';
+      }
+      html += '</div>';
+    }
+
+    html += '</div>';
+  }
+
+  html += '<div class="footer">Dokumen ini dicetak otomatis dari Sistem Laporan Tenaga Ahli<br>Fraksi PDI Perjuangan Kab. Kepulauan Meranti</div>';
+  html += '</body></html>';
+  return html;
+}
+
+// --- Convert image URL to base64 for Word embedding ---
+// Uses fetch() for reliable CORS download (more reliable than Image+Canvas)
+function urlToBase64(url) {
+  if (!url) return Promise.resolve('');
+  if (url.indexOf('data:') === 0) return Promise.resolve(url);
+  if (url.indexOf('http') !== 0) return Promise.resolve(url);
+
+  return fetch(url, { mode: 'cors', cache: 'force-cache' })
+    .then(function(response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.blob();
+    })
+    .then(function(blob) {
+      return new Promise(function(resolve, reject) {
+        var reader = new FileReader();
+        reader.onloadend = function() { resolve(reader.result); };
+        reader.onerror = function() { reject(new Error('FileReader error')); };
+        reader.readAsDataURL(blob);
+      });
+    })
+    .catch(function(err) {
+      // Fallback: try Image + Canvas approach
+      console.warn('fetch base64 failed for', url, err.message, '- trying canvas fallback');
+      return new Promise(function(resolve) {
+        var img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = function() {
+          try {
+            var canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || img.width;
+            canvas.height = img.naturalHeight || img.height;
+            var ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+          } catch (e) {
+            console.error('Canvas fallback also failed for', url);
+            resolve(url);
+          }
+        };
+        img.onerror = function() {
+          console.error('Image fallback also failed for', url);
+          resolve(url);
+        };
+        setTimeout(function() { resolve(url); }, 15000);
+        img.src = url;
+      });
+    });
+}
+
+// --- Download Word document ---
+function downloadWordDoc(html, filename) {
+  var blob = new Blob(['\ufeff' + html], { type: 'application/msword' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function() {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+}
+
+// ============================================================
+// PWA + SERVICE WORKER + FCM (v7)
+// ============================================================
+
+// --- Register Service Worker ---
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .then(function(reg) {
+        console.log('[SW] Registered successfully. Scope:', reg.scope);
+        // Check for updates periodically
+        setInterval(function() { reg.update(); }, 60 * 60 * 1000);
+      })
+      .catch(function(err) {
+        console.warn('[SW] Registration failed:', err);
+      });
+  } else {
+    console.log('[SW] Service Worker not supported');
+  }
+}
+
+// --- Initialize FCM and get push token ---
+async function initFCM() {
+  // FCM requires firebase-messaging SDK to be loaded
+  if (typeof firebase.messaging === 'undefined') {
+    console.log('[FCM] firebase-messaging SDK not loaded. Push notifications will use service worker fallback.');
+    registerServiceWorker();
+    return;
+  }
+
+  try {
+    const messaging = firebase.messaging();
+
+    // Request permission first
+    const permission = await requestNotifPermission();
+    if (!permission) {
+      console.log('[FCM] Notification permission not granted');
+      registerServiceWorker();
+      return;
+    }
+
+    // Get FCM token
+    const token = await messaging.getToken({
+      vapidKey: 'BLhJ_example_REPLACE_WITH_YOUR_VAPID_KEY'
+    });
+
+    console.log('[FCM] Token obtained:', token.substring(0, 20) + '...');
+
+    // Save token to Firestore user doc
+    if (currentUser && currentUser.uid) {
+      await db.collection('users').doc(currentUser.uid).update({
+        fcmToken: token,
+        fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(function(e) {
+        console.warn('[FCM] Failed to save token:', e);
+      });
+    }
+
+    // Listen for token refresh
+    messaging.onTokenRefresh(async function() {
+      try {
+        const newToken = await messaging.getToken();
+        console.log('[FCM] Token refreshed');
+        if (currentUser && currentUser.uid) {
+          await db.collection('users').doc(currentUser.uid).update({
+            fcmToken: newToken,
+            fcmTokenUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          }).catch(function(){});
+        }
+      } catch (e) {
+        console.error('[FCM] Token refresh error:', e);
+      }
+    });
+
+    // Handle foreground messages (when app is open)
+    messaging.onMessage(function(payload) {
+      console.log('[FCM] Foreground message:', payload);
+      var data = payload.data || {};
+      var title = data.title || 'Notifikasi Baru';
+      var body = data.body || '';
+      playNotifSound();
+      showSystemNotification(title, body);
+    });
+
+    console.log('[FCM] Initialized successfully');
+  } catch (e) {
+    console.error('[FCM] Init error:', e);
+    if (e.code === 'messaging/permission-blocked') {
+      console.warn('[FCM] Notification permission was blocked');
+    }
+  }
+
+  // Always register service worker regardless of FCM
+  registerServiceWorker();
+}
+
+// --- Auto-register service worker on load (for basic PWA support) ---
+// Call registerServiceWorker() immediately for basic offline + PWA install
+// Call initFCM() after login for full push notification support
+if ('serviceWorker' in navigator) {
+  registerServiceWorker();
+}
