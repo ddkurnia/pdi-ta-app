@@ -984,6 +984,17 @@ function updateAvatarUI(photo, initial) {
   }
 }
 
+// Helper: update hero avatar (profile photo in welcome banner)
+function updateHeroAvatar(photo, initial) {
+  var heroEl = document.getElementById('heroAvatar');
+  if (!heroEl) return;
+  if (photo) {
+    heroEl.innerHTML = '<img src="' + photo + '" alt="Foto Profil">';
+  } else {
+    heroEl.innerHTML = '<span>' + (initial || 'T') + '</span>';
+  }
+}
+
 async function processAvatarUpload(input) {
   var file = input.files[0];
   if (!file) return;
@@ -1039,6 +1050,7 @@ async function saveProfil() {
     updateAvatarUI(photo, nama.charAt(0).toUpperCase());
     var welcomeEl = document.getElementById('welcomeName');
     if (welcomeEl) welcomeEl.textContent = 'Halo, ' + nama + '!';
+    updateHeroAvatar(photo, nama.charAt(0).toUpperCase());
     hideLoading();
     showToast('Profil berhasil disimpan!', 'success');
     switchPage('home');
