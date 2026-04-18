@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>PDI TA App</title>
   <link rel="stylesheet" href="css/style.css?v=7">
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
   <style>
 /* ============================================
    PDI TA App — Modern Minimalist Design v3
@@ -128,7 +129,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 .nav-item.active { color: var(--red); }
 .nav-item.nav-center { margin-top: -20px; width: 52px; height: 52px; background: var(--red); border-radius: 50%; color: #fff !important; box-shadow: 0 4px 16px rgba(196,22,28,.35); padding: 0; gap: 0; }
 .nav-item.nav-center .nav-icon { font-size: 24px; }
-.nav-item.nav-center span:last-child { display: none; }
+.nav-item.nav-center span { display: none; }
 .nav-badge { position: absolute; top: 0; right: 4px; min-width: 16px; height: 16px; background: var(--red); color: #fff; font-size: 9px; font-weight: 700; border-radius: 8px; display: none; align-items: center; justify-content: center; padding: 0 4px; }
 .nav-badge.show { display: flex; }
 
@@ -295,7 +296,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
     </div>
     <div class="header-right">
       <button class="bell-btn" onclick="openNotifModal()">
-        🔔
+        <i class="ri-notification-3-line"></i>
         <span class="notif-dot" id="bellDot"></span>
         <span class="notif-count" id="bellCount">0</span>
       </button>
@@ -338,8 +339,8 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
       </div>
 
       <div class="quick-actions no-print">
-        <button class="btn btn-red" onclick="switchPage('buat')">+ Buat Laporan</button>
-        <button class="btn btn-outline" onclick="switchPage('riwayat')">Lihat Semua</button>
+        <button class="btn btn-red" onclick="switchPage('buat')"><i class="ri-edit-2-line" style="font-size:16px"></i> Buat Laporan</button>
+        <button class="btn btn-outline" onclick="switchPage('riwayat')"><i class="ri-list-check-2" style="font-size:16px"></i> Lihat Semua</button>
       </div>
 
       <div class="card">
@@ -390,13 +391,13 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
             <label>Foto Kegiatan</label>
             <input type="file" id="rPhotoInput" accept="image/*" multiple style="display:none" onchange="processFiles(this,'rPhotoGrid')">
             <div class="upload-box" onclick="document.getElementById('rPhotoInput').click()">
-              <div class="ub-icon">📷</div>
+              <i class="ri-image-add-line ub-icon"></i>
               <p>Klik untuk upload foto</p>
               <small>JPG/PNG, maks 5MB</small>
             </div>
             <div class="photo-grid" id="rPhotoGrid"></div>
           </div>
-          <button class="btn btn-red btn-block btn-lg" onclick="submitReport()">Kirim Laporan</button>
+          <button class="btn btn-red btn-block btn-lg" onclick="submitReport()"><i class="ri-send-plane-2-fill" style="font-size:16px"></i> Kirim Laporan</button>
         </div>
       </div>
     </div>
@@ -433,7 +434,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
           <h3>Riwayat Laporan</h3>
         </div>
         <div id="riwayatList">
-          <div class="empty-state"><div class="empty-icon">📋</div><h4>Tidak ada laporan</h4><p>Buat laporan pertama Anda</p></div>
+          <div class="empty-state"><i class="ri-file-list-3-line empty-icon"></i><h4>Tidak ada laporan</h4><p>Buat laporan pertama Anda</p></div>
         </div>
       </div>
     </div>
@@ -476,7 +477,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
             <label>Alamat</label>
             <textarea id="pAlamat" class="form-input" rows="2" placeholder="Alamat lengkap"></textarea>
           </div>
-          <button class="btn btn-red btn-block btn-lg" onclick="saveProfil()">Simpan Profil</button>
+          <button class="btn btn-red btn-block btn-lg" onclick="saveProfil()"><i class="ri-save-line" style="font-size:16px"></i> Simpan Profil</button>
         </div>
       </div>
     </div>
@@ -486,19 +487,19 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
   <!-- BOTTOM NAV -->
   <nav class="bottom-nav">
     <button class="nav-item active" data-page="home" onclick="switchPage('home')">
-      <span class="nav-icon">🏠</span>
+      <i class="ri-home-5-line nav-icon"></i>
       <span>Beranda</span>
     </button>
     <button class="nav-item nav-center" data-page="buat" onclick="switchPage('buat')">
-      <span class="nav-icon">✏️</span>
+      <i class="ri-add-line nav-icon"></i>
       <span>Buat</span>
     </button>
     <button class="nav-item" data-page="riwayat" onclick="switchPage('riwayat')">
-      <span class="nav-icon">📋</span>
+      <i class="ri-file-list-3-line nav-icon"></i>
       <span>Riwayat</span>
     </button>
     <button class="nav-item" data-page="profil" onclick="switchPage('profil')">
-      <span class="nav-icon">👤</span>
+      <i class="ri-user-3-line nav-icon"></i>
       <span>Profil</span>
     </button>
   </nav>
@@ -525,7 +526,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
       <button class="modal-close" onclick="closeModal('notifModal')">&times;</button>
     </div>
     <div class="modal-content" id="notifModalBody" style="padding:0">
-      <div class="empty-state"><div class="empty-icon">🔔</div><h4>Belum Ada Notifikasi</h4></div>
+      <div class="empty-state"><i class="ri-notification-off-line empty-icon"></i><h4>Belum Ada Notifikasi</h4></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline btn-sm" onclick="markAllRead(currentUser.uid)">Tandai Semua Dibaca</button>
