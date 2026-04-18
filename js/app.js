@@ -39,6 +39,64 @@ let cachedAdminUsers = [];
 let selectedReportIds = new Set();
 
 // ============================================================
+// SVG ICONS (Lucide-style, stroke-based)
+// ============================================================
+var ICONS = {
+  bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  plus: '<line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  'file-text': '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/>',
+  'check-circle': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  'x-circle': '<circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/>',
+  'refresh-cw': '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  megaphone: '<path d="m3 11 18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+  'alert-triangle': '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  check: '<polyline points="20 6 9 17 4 12"/>',
+  x: '<line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/>',
+  printer: '<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>'
+};
+
+function icon(name, size) {
+  var s = size || 22;
+  var paths = ICONS[name] || '';
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0">' + paths + '</svg>';
+}
+
+// ============================================================
+// SVG ICONS (Lucide-style, stroke-based)
+// ============================================================
+var ICONS = {
+  bell: '<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
+  home: '<path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
+  plus: '<line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/>',
+  user: '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/>',
+  'file-text': '<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/>',
+  'check-circle': '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>',
+  'x-circle': '<circle cx="12" cy="12" r="10"/><line x1="15" x2="9" y1="9" y2="15"/><line x1="9" x2="15" y1="9" y2="15"/>',
+  'refresh-cw': '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  megaphone: '<path d="m3 11 18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>',
+  'alert-triangle': '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  check: '<polyline points="20 6 9 17 4 12"/>',
+  x: '<line x1="18" x2="6" y1="6" y2="18"/><line x1="6" x2="18" y1="6" y2="18"/>',
+  printer: '<polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>'
+};
+
+function icon(name, size) {
+  var s = size || 22;
+  var paths = ICONS[name] || '';
+  return '<svg width="' + s + '" height="' + s + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;flex-shrink:0">' + paths + '</svg>';
+}
+
+// ============================================================
 // UTILITIES
 // ============================================================
 function $v(id) { const e = document.getElementById(id); return e ? e.value.trim() : ''; }
@@ -177,10 +235,10 @@ function showToast(msg, type) {
     c.className = 'toast-area';
     document.body.appendChild(c);
   }
-  var icons = { success: '\u2713', error: '\u2717', warning: '\u26A0', info: '\u2139' };
+  var icons = { success: 'ri-check-line', error: 'ri-close-line', warning: 'ri-alert-line', info: 'ri-information-line' };
   var t = document.createElement('div');
   t.className = 'toast-msg toast-' + type;
-  t.innerHTML = '<span>' + (icons[type] || '') + '</span><span>' + msg + '</span>';
+  t.innerHTML = '<i class="' + (icons[type] || 'ri-information-line') + '" style="font-size:16px"></i><span>' + msg + '</span>';
   c.appendChild(t);
   setTimeout(function() {
     t.style.opacity = '0';
@@ -272,7 +330,7 @@ function initTARealtime() {
       console.error('TA realtime error:', err);
       var el1 = document.getElementById('recentList');
       var el2 = document.getElementById('riwayatList');
-      var emptyHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+      var emptyHTML = '<div class="empty-state"><i class="ri-file-list-3-line empty-icon"></i><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
       if (el1) el1.innerHTML = emptyHTML;
       if (el2) el2.innerHTML = emptyHTML;
 
@@ -779,7 +837,7 @@ function renderNotifs(snapOrData) {
   // Support both original QuerySnapshot and sorted docs array
   var isEmpty = snapOrData.empty !== undefined ? snapOrData.empty : (snapOrData.empty === true);
   if (isEmpty || !snapOrData.docs || snapOrData.docs.length === 0) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDD14</div><h4>Belum Ada Notifikasi</h4><p>Notifikasi terbaru muncul di sini</p></div>';
+    el.innerHTML = '<div class="empty-state"><i class="ri-notification-off-line empty-icon"></i><h4>Belum Ada Notifikasi</h4><p>Notifikasi terbaru muncul di sini</p></div>';
     return;
   }
   var h = '';
@@ -787,15 +845,15 @@ function renderNotifs(snapOrData) {
     var n = typeof d.data === 'function' ? d.data() : d.data;
     var ur = !n.isRead;
     var judul = (n.judul || '').toLowerCase();
-    var icon = '\uD83D\uDCE2', bg = 'var(--purple-bg)';
-    if (judul.indexOf('diterima') >= 0 || judul.indexOf('akun') >= 0) { icon = '\u2705'; bg = 'var(--green-bg)'; }
-    else if (judul.indexOf('ditolak') >= 0) { icon = '\u274C'; bg = 'var(--red-light)'; }
-    else if (judul.indexOf('revisi') >= 0) { icon = '\uD83D\uDD04'; bg = 'var(--blue-bg)'; }
-    else if (judul.indexOf('laporan baru') >= 0) { icon = '\uD83D\uDCCB'; bg = 'var(--blue-bg)'; }
-    else if (judul.indexOf('pengumuman') >= 0) { icon = '\uD83D\uDCE2'; bg = 'var(--purple-bg)'; }
+    var icon = 'ri-megaphone-fill', bg = 'var(--purple-bg)';
+    if (judul.indexOf('diterima') >= 0 || judul.indexOf('akun') >= 0) { icon = 'ri-checkbox-circle-fill'; bg = 'var(--green-bg)'; }
+    else if (judul.indexOf('ditolak') >= 0) { icon = 'ri-close-circle-fill'; bg = 'var(--red-light)'; }
+    else if (judul.indexOf('revisi') >= 0) { icon = 'ri-refresh-line'; bg = 'var(--blue-bg)'; }
+    else if (judul.indexOf('laporan baru') >= 0) { icon = 'ri-file-add-line'; bg = 'var(--blue-bg)'; }
+    else if (judul.indexOf('pengumuman') >= 0) { icon = 'ri-megaphone-fill'; bg = 'var(--purple-bg)'; }
 
     h += '<div class="notif-item ' + (ur ? 'unread' : '') + '" onclick="markRead(\'' + d.id + '\')">' +
-      '<div class="notif-ic" style="background:' + bg + '">' + icon + '</div>' +
+      '<div class="notif-ic" style="background:' + bg + '"><i class="' + icon + '" style="font-size:18px"></i></div>' +
       '<div class="notif-body">' +
         '<div class="nb-title">' + esc(n.judul || '') + '</div>' +
         '<div class="nb-msg">' + esc(n.pesan || '') + '</div>' +
@@ -857,7 +915,7 @@ function renderTADashboard() {
   if (!container) return;
 
   if (!cachedTAReports.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+    container.innerHTML = '<div class="empty-state"><i class="ri-file-list-3-line empty-icon"></i><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
     return;
   }
 
@@ -888,7 +946,7 @@ function renderRiwayat() {
   if (!container) return;
 
   if (!filtered.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4><p>Belum ada laporan untuk periode ini</p></div>';
+    container.innerHTML = '<div class="empty-state"><i class="ri-file-list-3-line empty-icon"></i><h4>Tidak ada laporan</h4><p>Belum ada laporan untuk periode ini</p></div>';
     return;
   }
 
@@ -929,7 +987,7 @@ async function loadTADashboard() {
     if (!container) return;
 
     if (!allReports.length) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
+      container.innerHTML = '<div class="empty-state"><i class="ri-file-list-3-line empty-icon"></i><h4>Belum ada laporan</h4><p>Mulai buat laporan pertama Anda</p></div>';
       return;
     }
 
@@ -955,12 +1013,12 @@ function renderReportCard(r, id) {
   var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
 
   return '<div class="report-item" onclick="viewReport(\'' + id + '\')">' +
-    '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
+    '<div class="ri-icon" style="background:' + iconBg + '"><i class="ri-file-text-line" style="font-size:18px"></i></div>' +
     '<div class="ri-body">' +
       '<div class="ri-title">' + esc(r.judul) + '</div>' +
       '<div class="ri-sub">' + esc(r.type || 'Harian') + ' &middot; ' + formatDate(r.tanggal) + '</div>' +
       '<div class="ri-meta">' +
-        (fotoCount > 0 ? '\uD83D\uDCF7 ' + fotoCount + ' foto &middot; ' : '') +
+        (fotoCount > 0 ? '<i class="ri-camera-2-line" style="font-size:12px;vertical-align:middle"></i> ' + fotoCount + ' foto &middot; ' : '') +
         '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
       '</div>' +
     '</div>' +
@@ -973,7 +1031,7 @@ function renderReportCard(r, id) {
 function updateAvatarUI(photo, initial) {
   var avatarEl = document.getElementById('profileAvatar');
   if (!avatarEl) return;
-  var editIconHTML = '<div style="position:absolute;bottom:-2px;right:-2px;width:24px;height:24px;background:var(--red);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.2);z-index:2;pointer-events:none">\uD83D\uDCF7</div>';
+  var editIconHTML = '<div style="position:absolute;bottom:-2px;right:-2px;width:24px;height:24px;background:var(--red);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.2);z-index:2;pointer-events:none"><i class="ri-camera-2-line" style="font-size:11px"></i></div>';
 
   if (photo) {
     avatarEl.innerHTML = '<img src="' + photo + '" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;border-radius:50%">' + editIconHTML;
@@ -1156,7 +1214,7 @@ async function loadLaporan() {
     $s('f_pending', pe);
 
     if (!filtered.length) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4><p>Belum ada laporan untuk periode ini</p></div>';
+      container.innerHTML = '<div class="empty-state"><i class="ri-file-list-3-line empty-icon"></i><h4>Tidak ada laporan</h4><p>Belum ada laporan untuk periode ini</p></div>';
       return;
     }
 
@@ -1202,9 +1260,9 @@ async function viewReport(id) {
       adminActions = '<div class="mt-16" style="padding-top:16px;border-top:1px solid var(--border)">' +
         '<div class="detail-field"><label>Catatan (opsional)</label><textarea id="adminNote" class="form-input" rows="3" placeholder="Catatan admin..."></textarea></div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-          '<button class="btn btn-green" style="flex:1;min-width:100px" onclick="approveReport(\'' + id + '\')">\u2713 Diterima</button>' +
-          '<button class="btn" style="flex:1;min-width:100px;background:var(--blue);color:#fff" onclick="reviseReport(\'' + id + '\')">\u21BB Revisi</button>' +
-          '<button class="btn btn-red" style="flex:1;min-width:100px" onclick="rejectReport(\'' + id + '\')">\u2717 Ditolak</button>' +
+          '<button class="btn btn-green" style="flex:1;min-width:100px" onclick="approveReport(\'' + id + '\')"><i class="ri-check-line" style="font-size:14px"></i> Diterima</button>' +
+          '<button class="btn" style="flex:1;min-width:100px;background:var(--blue);color:#fff" onclick="reviseReport(\'' + id + '\')"><i class="ri-refresh-line" style="font-size:14px"></i> Revisi</button>' +
+          '<button class="btn btn-red" style="flex:1;min-width:100px" onclick="rejectReport(\'' + id + '\')"><i class="ri-close-line" style="font-size:14px"></i> Ditolak</button>' +
         '</div>' +
       '</div>';
     }
@@ -1213,7 +1271,7 @@ async function viewReport(id) {
     var printBtn = '';
     if (currentUser && currentUser.role === 'admin') {
       printBtn = '<div class="mt-16 no-print" style="padding-top:16px;border-top:1px solid var(--border)">' +
-        '<button class="btn btn-outline btn-block" onclick="printSingleReport(\'' + id + '\')">\uD83D\uDDA8 Cetak ke Word</button>' +
+        '<button class="btn btn-outline btn-block" onclick="printSingleReport(\'' + id + '\')"><i class="ri-file-download-line" style="font-size:14px"></i> Cetak ke Word</button>' +
       '</div>';
     }
 
@@ -1279,7 +1337,7 @@ function renderAdminDashUsers() {
   });
 
   if (!pendingUsers.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">\u2705</div><h4>Tidak ada permintaan baru</h4></div>';
+    el.innerHTML = '<div class="empty-state"><i class="ri-checkbox-circle-line empty-icon"></i><h4>Tidak ada permintaan baru</h4></div>';
     return;
   }
 
@@ -1310,7 +1368,7 @@ function renderAdminReportList() {
   if (!container) return;
 
   if (!filtered.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4></div>';
+    container.innerHTML = '<div class="empty-state"><i class="ri-file-list-3-line empty-icon"></i><h4>Tidak ada laporan</h4></div>';
     return;
   }
 
@@ -1340,7 +1398,7 @@ function renderAdminReportList() {
   if (isAdmin && selectedReportIds.size > 0) {
     header = '<div style="padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">' +
       '<span style="font-size:12px;font-weight:600;color:var(--text2)">' + selectedReportIds.size + ' laporan dipilih</span>' +
-      '<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="openPrintOptions()">\uD83D\uDDA8 Cetak Word</button>' +
+      '<button class="btn btn-outline btn-sm" style="margin-left:auto" onclick="openPrintOptions()"><i class="ri-file-download-line" style="font-size:14px"></i> Cetak Word</button>' +
       '<button class="btn btn-ghost btn-sm" onclick="clearAllReportSelections()">Batal</button>' +
     '</div>';
   }
@@ -1400,7 +1458,7 @@ function renderAdminReportList() {
 
       var quickBtns = '';
       if ((r.status === 'pending' || r.status === 'revisi') && isAdmin) {
-        quickBtns = ' <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="event.stopPropagation();quickRevise(\'' + item.id + '\')">\u21BB</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
+        quickBtns = ' <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')"><i class="ri-check-line"></i></button> <button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="event.stopPropagation();quickRevise(\'' + item.id + '\')"><i class="ri-refresh-line"></i></button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')"><i class="ri-close-line"></i></button>';
       }
 
       var checkbox = '';
@@ -1412,7 +1470,7 @@ function renderAdminReportList() {
 
       h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')" style="display:flex;align-items:center;padding-left:56px">' +
         checkbox +
-        '<div class="ri-icon" style="background:' + iconBg + ';width:36px;height:36px;font-size:15px">\uD83D\uDCC4</div>' +
+        '<div class="ri-icon" style="background:' + iconBg + ';width:36px;height:36px;font-size:15px"><i class="ri-file-text-line" style="font-size:18px"></i></div>' +
         '<div class="ri-body" style="flex:1;min-width:0">' +
           '<div class="ri-title">' + esc(r.judul) + '</div>' +
           '<div class="ri-sub">' + formatDate(r.tanggal) + ' &middot; ' + esc(r.type || 'Harian') + '</div>' +
@@ -1455,7 +1513,7 @@ function renderAdminUserList() {
   if (!container) return;
 
   if (!cachedAdminUsers.length) {
-    container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDC65</div><h4>Belum ada Tenaga Ahli</h4></div>';
+    container.innerHTML = '<div class="empty-state"><i class="ri-group-line empty-icon"></i><h4>Belum ada Tenaga Ahli</h4></div>';
     return;
   }
 
@@ -1486,11 +1544,11 @@ function renderAdminUserList() {
 
     var actions = '<span class="status status-' + statusClass + '">' + statusText + '</span>';
     if (u.status === 'pending') {
-      actions += ' <button class="btn btn-green btn-sm" onclick="approveUser(\'' + item.id + '\')">\u2713</button>' +
-                 ' <button class="btn btn-red btn-sm" onclick="rejectUser(\'' + item.id + '\')">\u2717</button>';
+      actions += ' <button class="btn btn-green btn-sm" onclick="approveUser(\'' + item.id + '\')"><i class="ri-check-line"></i></button>' +
+                 ' <button class="btn btn-red btn-sm" onclick="rejectUser(\'' + item.id + '\')"><i class="ri-close-line"></i></button>';
     }
     // Delete button for all users
-    actions += ' <button class="btn btn-ghost btn-sm" onclick="deleteUser(\'' + item.id + '\')" title="Hapus user" style="color:var(--text3);font-size:16px;margin-left:4px">\uD83D\uDDD1</button>';
+    actions += ' <button class="btn btn-ghost btn-sm" onclick="deleteUser(\'' + item.id + '\')" title="Hapus user" style="color:var(--text3);font-size:16px;margin-left:4px"><i class="ri-delete-bin-line"></i></button>';
 
     h += '<div class="pend-user" style="align-items:center">' +
       avatarHtml +
@@ -1530,7 +1588,7 @@ async function loadAdminDash() {
 
     var el = document.getElementById('pendUsers');
     if (!pendSnap.size) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-icon">\u2705</div><h4>Tidak ada permintaan baru</h4></div>';
+      el.innerHTML = '<div class="empty-state"><i class="ri-checkbox-circle-line empty-icon"></i><h4>Tidak ada permintaan baru</h4></div>';
     } else {
       var h = '';
       pendSnap.forEach(function(d) {
@@ -1655,7 +1713,7 @@ async function loadAdminReports() {
     sortReportsByDate(filtered);
 
     if (!filtered.length) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDCCB</div><h4>Tidak ada laporan</h4></div>';
+      container.innerHTML = '<div class="empty-state"><i class="ri-file-list-3-line empty-icon"></i><h4>Tidak ada laporan</h4></div>';
       return;
     }
 
@@ -1667,7 +1725,7 @@ async function loadAdminReports() {
       var iconBg = r.status === 'approved' ? 'var(--green-bg)' : r.status === 'rejected' ? 'var(--red-light)' : r.status === 'revisi' ? 'var(--blue-bg)' : 'var(--orange-bg)';
 
       h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')">' +
-        '<div class="ri-icon" style="background:' + iconBg + '">\uD83D\uDCC4</div>' +
+        '<div class="ri-icon" style="background:' + iconBg + '"><i class="ri-file-text-line" style="font-size:18px"></i></div>' +
         '<div class="ri-body">' +
           '<div class="ri-title">' + esc(r.judul) + '</div>' +
           '<div class="ri-sub">' + esc(r.nama || '-') + ' &middot; ' + formatDate(r.tanggal) + '</div>' +
@@ -1695,7 +1753,7 @@ async function loadAdminUsers() {
   try {
     var snap = await db.collection('users').where('role', '==', 'ta').limit(200).get();
     if (!snap.size) {
-      container.innerHTML = '<div class="empty-state"><div class="empty-icon">\uD83D\uDC65</div><h4>Belum ada Tenaga Ahli</h4></div>';
+      container.innerHTML = '<div class="empty-state"><i class="ri-group-line empty-icon"></i><h4>Belum ada Tenaga Ahli</h4></div>';
       return;
     }
 
@@ -1722,7 +1780,7 @@ async function loadAdminUsers() {
         '</div>' +
         '<div class="pu-actions">' +
           '<span class="status status-' + statusClass + '">' + statusText + '</span>' +
-          (u.status === 'pending' ? ' <button class="btn btn-green btn-sm" onclick="approveUser(\'' + d.id + '\')">\u2713</button> <button class="btn btn-red btn-sm" onclick="rejectUser(\'' + d.id + '\')">\u2717</button>' : '') +
+          (u.status === 'pending' ? ' <button class="btn btn-green btn-sm" onclick="approveUser(\'' + d.id + '\')"><i class="ri-check-line"></i></button> <button class="btn btn-red btn-sm" onclick="rejectUser(\'' + d.id + '\')"><i class="ri-close-line"></i></button>' : '') +
         '</div>' +
       '</div>';
     });
@@ -2058,11 +2116,11 @@ function buildGroupedReportHTML(filtered) {
 
       var quickBtns = '';
       if ((r.status === 'pending' || r.status === 'revisi') && isAdmin) {
-        quickBtns = ' <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')">\u2713</button> <button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="event.stopPropagation();quickRevise(\'' + item.id + '\')">\u21BB</button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')">\u2717</button>';
+        quickBtns = ' <button class="btn btn-green btn-sm" onclick="event.stopPropagation();quickApprove(\'' + item.id + '\')"><i class="ri-check-line"></i></button> <button class="btn btn-sm" style="background:var(--blue);color:#fff" onclick="event.stopPropagation();quickRevise(\'' + item.id + '\')"><i class="ri-refresh-line"></i></button> <button class="btn btn-red btn-sm" onclick="event.stopPropagation();quickReject(\'' + item.id + '\')"><i class="ri-close-line"></i></button>';
       }
 
       h += '<div class="report-item" onclick="viewReport(\'' + item.id + '\')" style="display:flex;align-items:center;padding-left:56px">' +
-        '<div class="ri-icon" style="background:' + iconBg + ';width:36px;height:36px;font-size:15px">\uD83D\uDCC4</div>' +
+        '<div class="ri-icon" style="background:' + iconBg + ';width:36px;height:36px;font-size:15px"><i class="ri-file-text-line" style="font-size:18px"></i></div>' +
         '<div class="ri-body" style="flex:1;min-width:0">' +
           '<div class="ri-title">' + esc(r.judul) + '</div>' +
           '<div class="ri-sub">' + formatDate(r.tanggal) + ' &middot; ' + esc(r.type || 'Harian') + '</div>' +
