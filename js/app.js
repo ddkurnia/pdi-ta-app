@@ -609,48 +609,252 @@ async function doResetPw() {
 }
 
 // ============================================================
-// CLOUDINARY UPLOAD
+// CLOUDINARY UPLOAD v2 — Robust: Validate, Compress, Progress
 // ============================================================
-async function uploadToCloudinary(file) {
-  var fd = new FormData();
-  fd.append('file', file);
-  fd.append('upload_preset', UPLOAD_PRESET);
-  try {
-    var r = await fetch(CLOUDINARY_URL, { method: 'POST', body: fd });
-    if (r.ok) { var d = await r.json(); return d.secure_url; }
-  } catch (e) {
-    console.warn('Cloudinary gagal, pakai base64:', e);
+
+// --- Allowed types and max original file size ---
+var ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+var MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+// --- 1. VALIDATE FILE ---
+// Returns { valid: true } or { valid: false, error: 'message' }
+function validateFile(file) {
+  if (!file) return { valid: false, error: 'Tidak ada file' };
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    return { valid: false, error: 'Format tidak didukung. Gunakan JPG, PNG, atau WebP.' };
   }
-  return new Promise(function(res, rej) {
-    var fr = new FileReader();
-    fr.onload = function() { res(fr.result); };
-    fr.onerror = rej;
-    fr.readAsDataURL(file);
+  if (file.size > MAX_FILE_SIZE) {
+    var sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+    return { valid: false, error: 'File terlalu besar (' + sizeMB + 'MB). Maksimal 10MB.' };
+  }
+  if (file.size === 0) {
+    return { valid: false, error: 'File kosong.' };
+  }
+  return { valid: true };
+}
+
+// --- 2. COMPRESS IMAGE ---
+// Uses browser-image-compression library
+async function compressImage(file) {
+  // If file is already small enough, return as-is (no compression needed)
+  if (file.size <= 300 * 1024) {
+    return file;
+  }
+  try {
+    var options = {
+      maxSizeMB: 0.3,
+      maxWidthOrHeight: 1280,
+      useWebWorker: true,
+      initialQuality: 0.8,
+      preserveExif: false,
+      fileType: file.type === 'image/png' ? 'image/png' : 'image/jpeg'
+    };
+    var compressed = await imageCompression(file, options);
+    console.log('[Upload] Compressed:', file.name, (file.size / 1024).toFixed(0) + 'KB -> ' + (compressed.size / 1024).toFixed(0) + 'KB');
+    return compressed;
+  } catch (e) {
+    console.warn('[Upload] Compression failed, using original:', e);
+    return file;
+  }
+}
+
+// --- 3. UPLOAD TO CLOUDINARY (XHR with Progress) ---
+// Returns Promise that resolves to secure_url
+function uploadToCloudinary(file, onProgress) {
+  return new Promise(function(resolve, reject) {
+    var fd = new FormData();
+    fd.append('file', file);
+    fd.append('upload_preset', UPLOAD_PRESET);
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', CLOUDINARY_URL, true);
+
+    // --- Progress tracking ---
+    xhr.upload.onprogress = function(e) {
+      if (e.lengthComputable && typeof onProgress === 'function') {
+        var percent = Math.round((e.loaded / e.total) * 100);
+        onProgress(percent);
+      }
+    };
+
+    // --- Timeout: 60 detik ---
+    var timeout = setTimeout(function() {
+      xhr.abort();
+      reject(new Error('Upload timeout (60 detik). Coba lagi.'));
+    }, 60000);
+
+    // --- On complete ---
+    xhr.onload = function() {
+      clearTimeout(timeout);
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          var data = JSON.parse(xhr.responseText);
+          if (data.secure_url) {
+            resolve(data.secure_url);
+          } else if (data.url) {
+            resolve(data.url);
+          } else {
+            reject(new Error('Response tidak mengandung URL gambar.'));
+          }
+        } catch (parseErr) {
+          reject(new Error('Gagal memproses respons server.'));
+        }
+      } else {
+        var errMsg = 'Upload gagal (HTTP ' + xhr.status + ')';
+        try {
+          var errData = JSON.parse(xhr.responseText);
+          if (errData.error && errData.error.message) {
+            errMsg = errData.error.message;
+          }
+        } catch (_) {}
+        reject(new Error(errMsg));
+      }
+    };
+
+    // --- On error ---
+    xhr.onerror = function() {
+      clearTimeout(timeout);
+      reject(new Error('Koneksi gagal. Periksa jaringan internet Anda.'));
+    };
+
+    xhr.onabort = function() {
+      clearTimeout(timeout);
+      reject(new Error('Upload dibatalkan.'));
+    };
+
+    xhr.send(fd);
   });
 }
 
+// --- 4. SHOW/HIDE PROGRESS BAR ---
+function showUploadProgress(containerId, fileName, currentIdx, totalFiles) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  // Remove existing progress if any
+  var existing = container.querySelector('.upload-progress-wrap');
+  if (existing) existing.remove();
+
+  var wrap = document.createElement('div');
+  wrap.className = 'upload-progress-wrap';
+  wrap.innerHTML =
+    '<div class="upload-progress-info">' +
+      '<i class="ri-upload-cloud-2-line" style="font-size:16px;color:var(--blue)"></i>' +
+      '<span class="up-filename">' + esc(fileName) + '</span>' +
+      '<span class="up-counter">' + currentIdx + '/' + totalFiles + '</span>' +
+    '</div>' +
+    '<div class="upload-progress-bar">' +
+      '<div class="upload-progress-fill" id="' + containerId + '_fill" style="width:0%"></div>' +
+    '</div>' +
+    '<div class="upload-progress-pct" id="' + containerId + '_pct">0%</div>';
+  container.appendChild(wrap);
+}
+
+function updateUploadProgress(containerId, percent) {
+  var fill = document.getElementById(containerId + '_fill');
+  var pct = document.getElementById(containerId + '_pct');
+  if (fill) fill.style.width = percent + '%';
+  if (pct) pct.textContent = percent + '%';
+}
+
+function hideUploadProgress(containerId) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  var wrap = container.querySelector('.upload-progress-wrap');
+  if (wrap) wrap.remove();
+}
+
+// --- 5. PROCESS FILES (Main entry: validate → compress → upload → UI) ---
 async function processFiles(input, gridId) {
   var files = Array.from(input.files);
   if (!files.length) return;
+
+  // Validate all files first
+  var validFiles = [];
   for (var i = 0; i < files.length; i++) {
-    var f = files[i];
-    if (f.size > 5 * 1024 * 1024) { showToast(f.name + ' terlalu besar', 'warning'); continue; }
-    if (!f.type.startsWith('image/')) { showToast(f.name + ' bukan gambar', 'warning'); continue; }
-    showToast('Mengupload ' + f.name + '...', 'info');
+    var result = validateFile(files[i]);
+    if (!result.valid) {
+      showToast(result.error, 'error');
+    } else {
+      validFiles.push(files[i]);
+    }
+  }
+  if (validFiles.length === 0) {
+    input.value = '';
+    return;
+  }
+
+  // Disable the upload button while processing
+  var uploadBox = input.closest('.form-group');
+  if (uploadBox) uploadBox.style.pointerEvents = 'none';
+  input.disabled = true;
+
+  // Process files sequentially
+  for (var j = 0; j < validFiles.length; j++) {
+    var f = validFiles[j];
+    var progressId = gridId + '_progress';
+    showUploadProgress(gridId, f.name, j + 1, validFiles.length);
+
     try {
-      var url = await uploadToCloudinary(f);
+      // Step 1: Compress
+      updateUploadProgress(gridId, 5);
+      var compressed = await compressImage(f);
+
+      // Step 2: Upload with progress
+      var url = await uploadToCloudinary(compressed, function(percent) {
+        // Map 0-100 to 10-95 range (10% reserved for compress, 5% for finalizing)
+        var mapped = Math.round(10 + (percent * 0.85));
+        updateUploadProgress(gridId, mapped);
+      });
+
+      // Step 3: Add to UI
+      updateUploadProgress(gridId, 100);
       uploadedPhotos.push(url);
       var g = document.getElementById(gridId);
-      var d = document.createElement('div');
-      d.className = 'photo-thumb';
-      d.innerHTML = '<img src="' + url + '"><button class="rm-btn" onclick="rmPhoto(this,\'' + url + '\')">&times;</button>';
-      g.appendChild(d);
-      showToast('Foto berhasil diupload', 'success');
-    } catch (e) { showToast('Gagal upload ' + f.name, 'error'); }
+      if (g) {
+        var d = document.createElement('div');
+        d.className = 'photo-thumb';
+        d.style.animation = 'fadeIn .3s ease';
+        d.innerHTML = '<img src="' + url + '" onclick="openLightbox(\'' + url + '\')"><button class="rm-btn" onclick="rmPhoto(this,\'' + url + '\')">&times;</button>';
+        g.appendChild(d);
+      }
+
+      setTimeout(function() { hideUploadProgress(gridId); }, 600);
+      showToast('Foto ' + (j + 1) + '/' + validFiles.length + ' berhasil diupload', 'success');
+
+    } catch (err) {
+      hideUploadProgress(gridId);
+      console.error('[Upload] Error:', err);
+      showToast('Gagal upload "' + f.name + '": ' + (err.message || 'Unknown error'), 'error');
+    }
   }
+
+  // Re-enable upload
+  input.disabled = false;
+  if (uploadBox) uploadBox.style.pointerEvents = '';
   input.value = '';
 }
 
+// --- 6. UPLOAD MULTIPLE (utility: returns array of URLs) ---
+async function uploadMultiple(files) {
+  var urls = [];
+  for (var i = 0; i < files.length; i++) {
+    var v = validateFile(files[i]);
+    if (!v.valid) {
+      showToast(files[i].name + ': ' + v.error, 'warning');
+      continue;
+    }
+    try {
+      var compressed = await compressImage(files[i]);
+      var url = await uploadToCloudinary(compressed);
+      urls.push(url);
+    } catch (e) {
+      showToast('Gagal upload ' + files[i].name, 'error');
+    }
+  }
+  return urls;
+}
+
+// --- 7. REMOVE PHOTO ---
 function rmPhoto(btn, url) {
   uploadedPhotos = uploadedPhotos.filter(function(u) { return u !== url; });
   btn.parentElement.remove();
@@ -1088,11 +1292,17 @@ function updateHeroAvatar(photo, initial) {
 async function processAvatarUpload(input) {
   var file = input.files[0];
   if (!file) return;
-  if (!file.type.startsWith('image/')) return showToast('File harus berupa gambar', 'error');
-  if (file.size > 5 * 1024 * 1024) return showToast('Ukuran maksimal 5MB', 'error');
+
+  // Validate
+  var v = validateFile(file);
+  if (!v.valid) { showToast(v.error, 'error'); input.value = ''; return; }
+
   showLoading();
   try {
-    var url = await uploadToCloudinary(file);
+    // Compress before upload
+    var compressed = await compressImage(file);
+    // Upload (no progress callback needed for avatar — loading overlay is shown)
+    var url = await uploadToCloudinary(compressed);
     uploadedPhotos = [url];
     updateAvatarUI(url, '');
     hideLoading();
