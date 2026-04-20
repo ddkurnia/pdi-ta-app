@@ -10,6 +10,7 @@
   <title>PDI TA App</title>
   <link rel="stylesheet" href="css/style.css?v=7">
   <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
   <style>
 /* ============================================
    PDI TA App — Modern Minimalist Design v3
@@ -284,6 +285,58 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
 .w-full { width: 100%; }
 .hidden { display: none !important; }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ====== UPLOAD PROGRESS BAR ====== */
+.upload-progress-wrap {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--blue-bg);
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(37, 99, 235, .15);
+}
+.upload-progress-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.upload-progress-info .up-filename {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--text);
+}
+.upload-progress-info .up-counter {
+  font-size: 11px;
+  color: var(--blue);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.upload-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(37, 99, 235, .12);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.upload-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), #60a5fa);
+  border-radius: 3px;
+  transition: width .2s ease;
+  min-width: 2%;
+}
+.upload-progress-pct {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--blue);
+  margin-top: 4px;
+  text-align: right;
+}
   </style>
 </head>
 <body>
@@ -390,11 +443,11 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
           </div>
           <div class="form-group">
             <label>Foto Kegiatan</label>
-            <input type="file" id="rPhotoInput" accept="image/*" multiple style="display:none" onchange="processFiles(this,'rPhotoGrid')">
+            <input type="file" id="rPhotoInput" accept="image/jpeg,image/png,image/webp" multiple style="display:none" onchange="processFiles(this,'rPhotoGrid')">
             <div class="upload-box" onclick="document.getElementById('rPhotoInput').click()">
               <i class="ri-image-add-line ub-icon"></i>
               <p>Klik untuk upload foto</p>
-              <small>JPG/PNG, maks 5MB</small>
+              <small>JPG/PNG/WebP, maks 10MB — otomatis dikompres</small>
             </div>
             <div class="photo-grid" id="rPhotoGrid"></div>
           </div>
@@ -446,7 +499,7 @@ textarea.form-input { resize: vertical; min-height: 100px; line-height: 1.6; }
         <div class="profile-avatar" id="profileAvatar" style="cursor:pointer;position:relative" onclick="document.getElementById('pPhotoInput').click()">T</div>
         <div class="profile-name" id="profileName">Tenaga Ahli</div>
         <div class="profile-role">Tenaga Ahli</div>
-        <input type="file" id="pPhotoInput" accept="image/*" style="display:none" onchange="processAvatarUpload(this)">
+        <input type="file" id="pPhotoInput" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="processAvatarUpload(this)">
       </div>
 
       <div class="card">
